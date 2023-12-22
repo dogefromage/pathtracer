@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "image.h": "c",
+        "stdio.h": "c",
+        "lodepng.h": "c",
+        "mathc.h": "c",
+        "mathcconfig.h": "c",
+        "stdbool.h": "c",
+        "math3d.h": "c",
+        "obj_parser.h": "c",
+        "render.h": "c",
+        "scene.h": "c",
+        "renderer.h": "c"
+    }
+}
