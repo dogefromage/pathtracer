@@ -1,58 +1,57 @@
 #pragma once
 
 #include "list.h"
+#include "mathc.h"
 
-#define OBJ_FILENAME_LENGTH 500
-#define MATERIAL_NAME_SIZE 255
-#define OBJ_LINE_SIZE 500
-#define MAX_VERTEX_COUNT 4  // can only handle quads or triangles
+#define OBJ_FILENAME_LENGTH 256
+#define MATERIAL_NAME_SIZE 256
+#define OBJ_LINE_SIZE 256
+#define MAX_NGON_SIZE 4  // can only handle quads or triangles
 
 typedef struct {
-    int vertex_index[MAX_VERTEX_COUNT];
-    int normal_index[MAX_VERTEX_COUNT];
-    int texture_index[MAX_VERTEX_COUNT];
-    int vertex_count;
+    int position;
+    int normal;
+    int texture;
+} obj_face_vertex;
+
+typedef struct {
+    size_t vertex_count;
+    obj_face_vertex vertices[MAX_NGON_SIZE];
     int material_index;
 } obj_face;
 
-typedef struct {
-    int pos_index;
-    int up_normal_index;
-    int equator_normal_index;
-    int texture_index[MAX_VERTEX_COUNT];
-    int material_index;
-} obj_sphere;
+// typedef struct {
+//     int pos_index;
+//     int up_normal_index;
+//     int equator_normal_index;
+//     int texture_index[MAX_VERTEX_COUNT];
+//     int material_index;
+// } obj_sphere;
 
-typedef struct {
-    int pos_index;
-    int normal_index;
-    int rotation_normal_index;
-    int texture_index[MAX_VERTEX_COUNT];
-    int material_index;
-} obj_plane;
-
-typedef struct {
-    double e[3];
-} obj_vector;
+// typedef struct {
+//     int pos_index;
+//     int normal_index;
+//     int rotation_normal_index;
+//     int texture_index[MAX_VERTEX_COUNT];
+//     int material_index;
+// } obj_plane;
 
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
     char texture_filename[OBJ_FILENAME_LENGTH];
-    double amb[3];
-    double diff[3];
-    double spec[3];
-    double reflect;
-    double refract;
-    double trans;
-    double shiny;
-    double glossy;
-    double refract_index;
+    struct vec3 amb;
+    struct vec3 diff;
+    struct vec3 spec;
+    mfloat_t reflect;
+    mfloat_t refract;
+    mfloat_t trans;
+    mfloat_t shiny;
+    mfloat_t glossy;
+    mfloat_t refract_index;
 } obj_material;
 
 typedef struct {
-    int camera_pos_index;
-    int camera_look_point_index;
-    int camera_up_norm_index;
+    int position, target, updir;
 } obj_camera;
 
 typedef struct {
@@ -61,66 +60,47 @@ typedef struct {
 } obj_light_point;
 
 typedef struct {
-    int pos_index;
-    int normal_index;
-    int material_index;
-} obj_light_disc;
-
-typedef struct {
-    int vertex_index[MAX_VERTEX_COUNT];
+    size_t vertex_count;
+    int vertices[MAX_NGON_SIZE];
     int material_index;
 } obj_light_quad;
 
 typedef struct {
-    //	vector extreme_dimensions[2];
-    char scene_filename[OBJ_FILENAME_LENGTH];
-    char material_filename[OBJ_FILENAME_LENGTH];
+    List vertex_list;
+    List vertex_normal_list;
+    List vertex_texture_list;
 
-    list vertex_list;
-    list vertex_normal_list;
-    list vertex_texture_list;
+    List face_list;
 
-    list face_list;
-    list sphere_list;
-    list plane_list;
+    List light_point_list;
+    List light_quad_list;
 
-    list light_point_list;
-    list light_quad_list;
-    list light_disc_list;
-
-    list material_list;
+    List material_list;
 
     obj_camera *camera;
 } obj_growable_scene_data;
 
 typedef struct {
-    obj_vector **vertex_list;
-    obj_vector **vertex_normal_list;
-    obj_vector **vertex_texture_list;
+    // keep vectors aligned in memory
+    struct vec3 *vertex_list;
+    struct vec3 *vertex_normal_list;
+    struct vec3 *vertex_texture_list;
+    size_t vertex_count;
+    size_t vertex_normal_count;
+    size_t vertex_texture_count;
 
-    obj_face **face_list;
-    obj_sphere **sphere_list;
-    obj_plane **plane_list;
+    obj_face *face_list;
+    size_t face_count;
 
-    obj_light_point **light_point_list;
-    obj_light_quad **light_quad_list;
-    obj_light_disc **light_disc_list;
+    // also keep lights aligned
+    obj_light_point *light_point_list;
+    obj_light_quad *light_quad_list;
+    size_t light_point_count;
+    size_t light_quad_count;
 
+    // materials are too large, keep pointers in array
     obj_material **material_list;
-
-    int vertex_count;
-    int vertex_normal_count;
-    int vertex_texture_count;
-
-    int face_count;
-    int sphere_count;
-    int plane_count;
-
-    int light_point_count;
-    int light_quad_count;
-    int light_disc_count;
-
-    int material_count;
+    size_t material_count;
 
     obj_camera *camera;
 } obj_scene_data;

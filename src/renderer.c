@@ -1,221 +1,213 @@
 #include "renderer.h"
 
+#include <assert.h>
+#include <stdio.h>
+
 #include "math.h"
 #include "obj_parser.h"
 
+void ray_at(mfloat_t* out, ray_t* ray, mfloat_t t) {
+    vec3_multiply_f(out, ray->r.v, t);
+    vec3_add(out, ray->o.v, out);
+}
+
+void barycentric_lincom(
+    mfloat_t* out,
+    mfloat_t* A, mfloat_t* B, mfloat_t* C,
+    mfloat_t t, mfloat_t u, mfloat_t v) {
+    mfloat_t x[3];
+    vec3_multiply_f(out, A, t);
+    vec3_multiply_f(x, B, u);
+    vec3_add(out, out, x);
+    vec3_multiply_f(x, C, v);
+    vec3_add(out, out, x);
+}
+
+#define TRIANGLE_DETERMINANT_EPS 1e-12
+#define TRIANGLE_MARGIN_EPS 1e-12
 // super fast Möller Trumbore ray-triangle intersection
 // https://cadxfem.org/inf/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
 // https://www.youtube.com/watch?v=fK1RPmF_zjQ
-
-#define EPSILON 1e-6
-
-#define CROSS(dest, v1, v2)                  \
-    dest[0] = v1[1] * v2[2] - v1[2] * v2[1]; \
-    dest[1] = v1[2] * v2[0] - v1[0] * v2[2]; \
-    dest[2] = v1[0] * v2[1] - v1[1] * v2[0];
-
-#define DOT(v1, v2) \
-    (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2])
-
-#define SUB(dest, v1, v2)    \
-    dest[0] = v1[0] - v2[0]; \
-    dest[1] = v1[1] - v2[1]; \
-    dest[2] = v1[2] - v2[2];
-
-#define BARY(x, A, B, C, t, u, v)          \
-    x[0] = t * A[0] + u * B[0] + v * C[0]; \
-    x[1] = t * A[1] + u * B[1] + v * C[1]; \
-    x[2] = t * A[2] + u * B[2] + v * C[2]
-
-int moeller_trumbore_intersect(double orig[3], double dir[3], double vert0[3], double vert1[3], double vert2[3],
-                               double* t, double* u, double* v) {
-    double edge1[3], edge2[3], tvec[3], pvec[3], qvec[3];
-    double det, inv_det;
+int moeller_trumbore_intersect(
+    mfloat_t* orig, mfloat_t* dir,
+    mfloat_t* vert0, mfloat_t* vert1, mfloat_t* vert2,
+    mfloat_t* t, mfloat_t* u, mfloat_t* v) {
+    mfloat_t edge1[3], edge2[3], tvec[3], pvec[3], qvec[3];
+    mfloat_t det, inv_det;
 
     // Find vectors for two edges sharing vert0
-    SUB(edge1, vert1, vert0);
-    SUB(edge2, vert2, vert0);
+    vec3_subtract(edge1, vert1, vert0);
+    vec3_subtract(edge2, vert2, vert0);
 
     // Begin calculating determinant - also used to calculate U parameter
-    CROSS(pvec, dir, edge2);
+    vec3_cross(pvec, dir, edge2);
     // if determinant is near zero, ray lies in plane of triangle
-    det = DOT(edge1, pvec);
+    det = vec3_dot(edge1, pvec);
 
 #ifdef TEST_CULL
     // Define TEST_CULL if culling is desired
-    if (det < EPSILON)
+    if (det < TRIANGLE_DETERMINANT_EPS)
         return 0;
 
     // Calculate distance from vert0 to ray origin
-    SUB(tvec, orig, vert0);
+    vec3_subtract(tvec, orig, vert0);
 
     // Calculate U parameter and test bounds
-    *u = DOT(tvec, pvec);
+    *u = vec3_dot(tvec, pvec);
     if (*u < 0.0 || *u > det)
         return 0;
 
     // Prepare to test V parameter
-    CROSS(qvec, tvec, edge1);
+    vec3_cross(qvec, tvec, edge1);
 
     // Calculate V parameter and test bounds
-    *v = DOT(dir, qvec);
+    *v = vec3_dot(dir, qvec);
     if (*v < 0.0 || *u + *v > det)
         return 0;
 
     // Calculate t, scale parameters, ray intersects triangle
-    *t = DOT(edge2, qvec);
+    *t = vec3_dot(edge2, qvec);
     inv_det = 1.0 / det;
     *t *= inv_det;
     *u *= inv_det;
     *v *= inv_det;
 #else
     // The non-culling branch
-    if (det > -EPSILON && det < EPSILON)
+    if (det > -TRIANGLE_DETERMINANT_EPS && det < TRIANGLE_DETERMINANT_EPS)
         return 0;
     inv_det = 1.0 / det;
 
     // Calculate distance from vert0 to ray origin
-    SUB(tvec, orig, vert0);
+    vec3_subtract(tvec, orig, vert0);
 
     // Calculate U parameter and test bounds
-    *u = DOT(tvec, pvec) * inv_det;
-    if (*u < 0.0 || *u > 1.0)
+    *u = vec3_dot(tvec, pvec) * inv_det;
+    if (*u < -TRIANGLE_MARGIN_EPS || *u > (1.0 + TRIANGLE_MARGIN_EPS))
         return 0;
 
     // Prepare to test V parameter
-    CROSS(qvec, tvec, edge1);
+    vec3_cross(qvec, tvec, edge1);
 
     // Calculate V parameter and test bounds
-    *v = DOT(dir, qvec) * inv_det;
-    if (*v < 0.0 || *u + *v > 1.0)
+    *v = vec3_dot(dir, qvec) * inv_det;
+    if (*v < -TRIANGLE_MARGIN_EPS || *u + *v > (1.0 + TRIANGLE_MARGIN_EPS))
         return 0;
 
     // Calculate t, ray intersects triangle
-    *t = DOT(edge2, qvec) * inv_det;
+    *t = vec3_dot(edge2, qvec) * inv_det;
 #endif
-
     return 1;
 }
 
-static void intersect_face(obj_scene_data* scene, ray_t* ray, Intersection* hit, int faceIndex) {
-    obj_face* face = scene->face_list[faceIndex];
-    double O[3], D[3];
-    O[0] = ray->o.x;
-    O[1] = ray->o.y;
-    O[2] = ray->o.z;
-    D[0] = ray->r.x;
-    D[1] = ray->r.y;
-    D[2] = ray->r.z;
+void intersect_face(obj_scene_data* scene, ray_t* ray, Intersection* hit, int faceIndex) {
+    obj_face* face = &scene->face_list[faceIndex];
 
     // loop over n-gon triangles fan-style
-    for (int i = 2; i < face->vertex_count; i++) {
-        int a = 0;
-        int b = i - 1;
-        int c = i;
-        int vert_a = face->vertex_index[a];
-        int vert_b = face->vertex_index[b];
-        int vert_c = face->vertex_index[c];
-        double* A = scene->vertex_list[vert_a]->e;
-        double* B = scene->vertex_list[vert_b]->e;
-        double* C = scene->vertex_list[vert_c]->e;
-        double t, u, v;
-        int has_hit = moeller_trumbore_intersect(
-            O, D, A, B, C, &t, &u, &v);
+    for (size_t i = 2; i < face->vertex_count; i++) {
+        obj_face_vertex* a = &face->vertices[0];
+        obj_face_vertex* b = &face->vertices[i - 1];
+        obj_face_vertex* c = &face->vertices[i];
+        mfloat_t* A = scene->vertex_list[a->position].v;
+        mfloat_t* B = scene->vertex_list[b->position].v;
+        mfloat_t* C = scene->vertex_list[c->position].v;
 
-        if (has_hit && t > hit->distance) {
+        mfloat_t t, u, v;
+        int has_hit = moeller_trumbore_intersect(
+            ray->o.v, ray->r.v, A, B, C, &t, &u, &v);
+
+        if (has_hit && t >= 0 && t < hit->distance) {
             hit->distance = t;
             hit->material = face->material_index;
-            double t = 1.0 - u - v;
-            BARY(hit->position, A, B, C, t, u, v);
-            BARY(hit->texture_coord,
-                 scene->vertex_texture_list[face->texture_index[a]]->e,
-                 scene->vertex_texture_list[face->texture_index[b]]->e,
-                 scene->vertex_texture_list[face->texture_index[c]]->e,
-                 t, u, v);
-            BARY(hit->normal,
-                 scene->vertex_normal_list[face->normal_index[a]]->e,
-                 scene->vertex_normal_list[face->normal_index[b]]->e,
-                 scene->vertex_normal_list[face->normal_index[c]]->e,
-                 t, u, v);
-
-            // normalize normal
-            double invNorm = 1.0 / sqrt(DOT(hit->normal, hit->normal));
-            for (int i = 0; i < 3; i++) {
-                hit->normal[i] *= invNorm;
-            }
+            mfloat_t t = 1.0 - u - v;
+            barycentric_lincom(hit->position.v, A, B, C, t, u, v);
+            barycentric_lincom(hit->texture_coord.v,
+                               scene->vertex_texture_list[a->texture].v,
+                               scene->vertex_texture_list[b->texture].v,
+                               scene->vertex_texture_list[c->texture].v,
+                               t, u, v);
+            barycentric_lincom(hit->normal.v,
+                               scene->vertex_normal_list[a->normal].v,
+                               scene->vertex_normal_list[b->normal].v,
+                               scene->vertex_normal_list[c->normal].v,
+                               t, u, v);
+            vec3_normalize(hit->normal.v, hit->normal.v);
         }
     }
 }
 
-// static void intersect_sphere(obj_scene_data* scene, ray_t* ray, Intersection* hit, int sphere) {
-//     // intersect some sphere at
-//     scene->sphere_list[sphere]
-//     vec3_t sphere_origin =
-//     float sphere_radius = 1.0;
-
-//     // length to plane
-//     float t = v3_dot(ray->r, v3_sub(sphere_origin, ray->o));
-
-//     if (t < 0) {
-//         return 0;  // behind camera
-//     }
-
-//     // intersection point at parallel plane
-//     vec3_t x = ray_at(ray, t);
-
-//     // find distance from x to origin
-//     float dXO = v3_length(v3_sub(sphere_origin, x));
-
-//     float dXISqr = sphere_radius * sphere_radius - dXO * dXO;
-
-//     if (dXISqr < 0) {
-//         return 0;  // ray misses sphere
-//     }
-
-//     return 1;  // ray hits sphere, doesn't matter where for now
-
-//     // float dXI = sqrtf(dXISqr);
-//     // ...
-// }
-
-// static void intersect_plane(obj_scene_data* scene, ray_t* ray, Intersection* hit, int plane) {
-
-// }
-
-static void intersect(obj_scene_data* scene, ray_t* ray, Intersection* hit) {
-    hit->distance = -1;
-    for (int i = 0; i < scene->face_count; i++) {
+void intersect(obj_scene_data* scene, ray_t* ray, Intersection* hit) {
+    hit->distance = CLEAR_DISTANCE;
+    for (size_t i = 0; i < scene->face_count; i++) {
         intersect_face(scene, ray, hit, i);
     }
 }
 
-void render(vec3_t* pixel, obj_scene_data* scene, float u, float v) {
+void get_camera_ray(ray_t* ray, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
+    assert(scene->camera);
+
+    // camera settings
+    mfloat_t sensor_height = 0.2,
+             focal_length = 0.25;
+
+    struct vec3 U, V, W,
+        *P = &scene->vertex_list[scene->camera->position],
+        *T = &scene->vertex_list[scene->camera->target],
+        *Up = &scene->vertex_normal_list[scene->camera->updir];
+
+    vec3_subtract(W.v, T->v, P->v);
+    vec3_cross(U.v, W.v, Up->v);
+    vec3_cross(V.v, U.v, W.v);
+
+    vec3_normalize(U.v, U.v);
+    vec3_normalize(V.v, V.v);
+    vec3_normalize(W.v, W.v);
+
+    vec3_multiply_f(U.v, U.v, 0.5 * sensor_height);
+    vec3_multiply_f(V.v, V.v, 0.5 * sensor_height);
+    vec3_multiply_f(W.v, W.v, focal_length);
+
+    // U, V, W build orthogonal basis for camera ray direction
+    // D = u*U + v*V + 1*W
+
+    // build change of basis matrix A
+    struct mat3 A;
+    vec3_assign(&A.m11, U.v);
+    vec3_assign(&A.m12, V.v);
+    vec3_assign(&A.m13, W.v);
+
+    // camera coordinate vector for pixel
+    struct vec3 x = {.x = u, .y = v, .z = 1};
+
+    vec3_assign(ray->o.v, P->v);
+    vec3_multiply_mat3(ray->r.v, x.v, A.v);
+    vec3_normalize(ray->r.v, ray->r.v);
+}
+
+void render(struct vec3* pixel, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
     // printf("Render (%f, %f)", u, v);
 
-    float sensor_height = 0.2;
-    float focal_length = 0.6;
-
-    vec3_t cam_pos = vec3(0, 0, -5);
-    vec3_t cam_dir = v3_norm(vec3(
-        sensor_height * u,
-        sensor_height * v,
-        1 * focal_length));
-    ray_t camera_ray = { .o=cam_pos, .r=cam_dir };
+    ray_t camera_ray;
+    get_camera_ray(&camera_ray, scene, u, v);
 
     Intersection hit;
-
     intersect(scene, &camera_ray, &hit);
 
-    // NORMAL
-    pixel->x = hit.normal[0];
-    pixel->y = hit.normal[1];
-    pixel->z = hit.normal[2];
+    pixel->r = pixel->g = pixel->b = 0;
+
+    int hit_sky = hit.distance >= CLEAR_DISTANCE;
+    if (hit_sky) {
+        return;
+    }
+
+    vec3_assign(pixel->v, hit.normal.v);
+    vec3_multiply_f(pixel->v, pixel->v, 0.5);
+    vec3_add_f(pixel->v, pixel->v, 0.5);
 
     // // DEPTH
-    // float far = 8;
-    // float near = 2;
-    // float b = (hit.distance - near) / (far - near);
-    // *pixel = (vec3_t){b, b, b};
+    // mfloat_t far = 5000;
+    // mfloat_t near = 0;
+    // mfloat_t b = (hit.distance - near) / (far - near);
+    // *pixel = (struct vec3){.v={b, b, b}};
 
     // // HAS HIT
     // if (hit.distance >= 0) {

@@ -5,7 +5,8 @@
 
 # Compiler and compiler flags
 CC = gcc
-CFLAGS = -Wall -Wextra -I./include -std=gnu99
+OPTIMIZATION_FLAGS= -O2
+CFLAGS = -Wall -Wextra -g -I./include -std=gnu99 # $(OPTIMIZATION_FLAGS)
 
 # Directories
 SRC_DIR = src
@@ -24,15 +25,15 @@ TARGET = $(BIN_DIR)/$(EXEC_NAME)
 # Default target
 all: $(TARGET)
 
-# Rule to build the executable
-$(TARGET): $(OBJ_FILES)
-	@mkdir -p $(BIN_DIR)
-	$(CC) $^ -o $@ -lm
-
 # Rule to compile C source files to object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# Rule to build the executable
+$(TARGET): $(OBJ_FILES)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $^ -o $@ -lm
 
 # Clean rule
 clean:

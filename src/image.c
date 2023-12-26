@@ -2,14 +2,14 @@
 
 #include <stdio.h>
 
-static char clamp_channel(float c) {
+static char clamp_channel(mfloat_t c) {
     if (c < 0.0) c = 0.0;
     if (c > 1.0) c = 1.0;
     return (char)(255 * c);
 }
 
 // https://stackoverflow.com/questions/27613601/rendering-an-image-using-c
-void write_bmp(vec3_t* pixels, int width, int height, const char* filename) {
+void write_bmp(struct vec3 *pixels, int width, int height, const char* filename) {
     unsigned int header[14];
     int i, j;
     FILE* fp = fopen(filename, "wb");
@@ -33,9 +33,9 @@ void write_bmp(vec3_t* pixels, int width, int height, const char* filename) {
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             int pixel = i * width + j;
-            unsigned char R = clamp_channel(pixels[pixel].x);
-            unsigned char G = clamp_channel(pixels[pixel].y);
-            unsigned char B = clamp_channel(pixels[pixel].z);
+            unsigned char R = clamp_channel(pixels[pixel].r);
+            unsigned char G = clamp_channel(pixels[pixel].g);
+            unsigned char B = clamp_channel(pixels[pixel].b);
             fwrite(&B, 1, 1, fp);
             fwrite(&G, 1, 1, fp);
             fwrite(&R, 1, 1, fp);

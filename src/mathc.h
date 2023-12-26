@@ -237,6 +237,11 @@ struct vec3 {
 			mfloat_t z;
 		};
 		mfloat_t v[VEC3_SIZE];
+        struct {
+			mfloat_t r;
+			mfloat_t g;
+			mfloat_t b;
+        };
 	};
 #else
 	mfloat_t x;

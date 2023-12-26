@@ -1,26 +1,19 @@
 #pragma once
 
+#include <stdlib.h>
+
 typedef struct {
-    int item_count;
-    int current_max_size;
-    char growable;
+    size_t item_count;
+    size_t reserved_count;
+    void** data;
+} List;
 
-    void **items;
-    char **names;
-} list;
+void List_init(List* list);
+void List_reserve(List* list, size_t reserve_slots);
+int List_insert(List* list, void* item);
+void* List_at(List* list, size_t index);
+void* List_begin(List* list);
+void* List_end(List* list);
 
-void list_make(list *listo, int size, char growable);
-int list_add_item(list *listo, void *item, char *name);
-char *list_print_items(list *listo);
-void *list_get_name(list *listo, char *name);
-void *list_get_index(list *listo, int indx);
-void *list_get_item(list *listo, void *item_to_find);
-int list_find(list *listo, char *name_to_find);
-void list_delete_index(list *listo, int indx);
-void list_delete_name(list *listo, char *name);
-void list_delete_item(list *listo, void *item);
-void list_delete_all(list *listo);
-void list_print_list(list *listo);
-void list_free(list *listo);
-
-// void test_list();
+void List_free_self(List* list);
+void List_free_full(List* list);
