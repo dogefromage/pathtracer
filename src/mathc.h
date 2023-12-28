@@ -546,6 +546,7 @@ mfloat_t *vec3_assign(mfloat_t *result, mfloat_t *v0);
 mfloat_t *vec3_assign_vec3i(mfloat_t *result, mint_t *v0);
 #endif
 mfloat_t *vec3_zero(mfloat_t *result);
+mfloat_t *vec3_const(mfloat_t *result, mfloat_t v);
 mfloat_t *vec3_one(mfloat_t *result);
 mfloat_t *vec3_sign(mfloat_t *result, mfloat_t *v0);
 mfloat_t *vec3_add(mfloat_t *result, mfloat_t *v0, mfloat_t *v1);
@@ -577,6 +578,7 @@ mfloat_t *vec3_rotate(mfloat_t *result, mfloat_t *v0, mfloat_t *ra, mfloat_t f);
 mfloat_t *vec3_lerp(mfloat_t *result, mfloat_t *v0, mfloat_t *v1, mfloat_t f);
 mfloat_t *vec3_bezier3(mfloat_t *result, mfloat_t *v0, mfloat_t *v1, mfloat_t *v2, mfloat_t f);
 mfloat_t *vec3_bezier4(mfloat_t *result, mfloat_t *v0, mfloat_t *v1, mfloat_t *v2, mfloat_t *v3, mfloat_t f);
+mfloat_t vec3_max_component(mfloat_t *v);
 mfloat_t vec3_length(mfloat_t *v0);
 mfloat_t vec3_length_squared(mfloat_t *v0);
 mfloat_t vec3_distance(mfloat_t *v0, mfloat_t *v1);

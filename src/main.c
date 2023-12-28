@@ -25,22 +25,27 @@ int main(int argc, char* argv[]) {
     struct vec3* img = (struct vec3*)calloc(sizeof(struct vec3), width * height);
     assert(img);
 
-    int y_start = 0, y_end = height, x_start = 0, x_end = width;
-    // x_start = 150; x_end = 150 + 1;
-    // y_start = 100; y_end = 100 + 1;
+    int outer_samples = 50;
+    int inner_samples = 10;
 
-    for (int y = y_start; y < y_end; y++) {
-        for (int x = x_start; x < x_end; x++) {
-            double u = (2 * x - width) / (double)height;
-            double v = (2 * y - height) / (double)height;
-            render(&img[y * width + x], &scene, u, v);
-        }
+    for (int i = 0; i < outer_samples; i++) {
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                mfloat_t u = (2 * x - width) / (mfloat_t)height;
+                mfloat_t v = (2 * y - height) / (mfloat_t)height;
 
-        if (y % 20 == 0) {
-            write_bmp(img, width, height, "render.bmp");
+                mfloat_t result[VEC3_SIZE];
+                render(result, &scene, u, v, inner_samples);
+
+                mfloat_t* pixel = img[y * width + x].v;
+
+                vec3_multiply_f(pixel, pixel, i / (double)(i + 1));
+                vec3_multiply_f(result, result, 1.0 / (double)(i + 1));
+                vec3_add(pixel, pixel, result);
+            }
         }
+        write_bmp(img, width, height, "render.bmp");
     }
-    write_bmp(img, width, height, "render.bmp");
 
     free(img);
     delete_obj_data(&scene);

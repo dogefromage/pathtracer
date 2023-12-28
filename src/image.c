@@ -2,14 +2,25 @@
 
 #include <stdio.h>
 
-static char clamp_channel(mfloat_t c) {
+char clamp_channel(mfloat_t c) {
     if (c < 0.0) c = 0.0;
     if (c > 1.0) c = 1.0;
     return (char)(255 * c);
 }
 
+void linear_to_gamma(mfloat_t* c) {
+    c[0] = MSQRT(c[0]);
+    c[1] = MSQRT(c[1]);
+    c[2] = MSQRT(c[2]);
+}
+
+void color_correct(mfloat_t* c) {
+    linear_to_gamma(c);
+    vec3_multiply_f(c, c, 1);
+}
+
 // https://stackoverflow.com/questions/27613601/rendering-an-image-using-c
-void write_bmp(struct vec3 *pixels, int width, int height, const char* filename) {
+void write_bmp(struct vec3* pixels, int width, int height, const char* filename) {
     unsigned int header[14];
     int i, j;
     FILE* fp = fopen(filename, "wb");
@@ -33,9 +44,12 @@ void write_bmp(struct vec3 *pixels, int width, int height, const char* filename)
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             int pixel = i * width + j;
-            unsigned char R = clamp_channel(pixels[pixel].r);
-            unsigned char G = clamp_channel(pixels[pixel].g);
-            unsigned char B = clamp_channel(pixels[pixel].b);
+            mfloat_t color[VEC3_SIZE];
+            vec3_assign(color, pixels[pixel].v);
+            color_correct(color);
+            unsigned char R = clamp_channel(color[0]);
+            unsigned char G = clamp_channel(color[1]);
+            unsigned char B = clamp_channel(color[2]);
             fwrite(&B, 1, 1, fp);
             fwrite(&G, 1, 1, fp);
             fwrite(&R, 1, 1, fp);

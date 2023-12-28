@@ -19,21 +19,16 @@ static size_t linenumber = 0;
 #define PARSE_ERR(s) (fprintf(stderr, "[%s:%lu] %s", filename, linenumber, s))
 
 void obj_set_material_defaults(obj_material *mtl) {
-    mtl->amb.v[0] = 0.2;
-    mtl->amb.v[1] = 0.2;
-    mtl->amb.v[2] = 0.2;
-    mtl->diff.v[0] = 0.8;
-    mtl->diff.v[1] = 0.8;
-    mtl->diff.v[2] = 0.8;
-    mtl->spec.v[0] = 1.0;
-    mtl->spec.v[1] = 1.0;
-    mtl->spec.v[2] = 1.0;
-    mtl->reflect = 0.0;
-    mtl->trans = 1;
-    mtl->glossy = 98;
-    mtl->shiny = 0;
+    vec3_const(mtl->amb, 0.0);
+    vec3_const(mtl->diff, 0.8);
+    vec3_const(mtl->spec, 1.0);
+    vec3_const(mtl->emit, 0.0);
+
+    mtl->spec_exp = 0;
+    mtl->dissolved = 1;
     mtl->refract_index = 1;
-    mtl->texture_filename[0] = '\0';
+
+    mtl->model = 2;
 }
 
 void obj_fix_numbering(int *index, int curr_list_size) {
@@ -193,54 +188,62 @@ int obj_parse_mtl_file(obj_growable_scene_data *scene) {
             // get the name
             strncpy(current_mtl->name, strtok(NULL, WHITESPACE), MATERIAL_NAME_SIZE - 1);
             List_insert(&scene->material_list, current_mtl);
+            // printf("Created mtl %s, %d\n", current_mtl->name);
         }
         // ambient
         else if (!strcmp(current_token, "Ka") && current_mtl != NULL) {
-            current_mtl->amb.v[0] = atof(strtok(NULL, " \t"));
-            current_mtl->amb.v[1] = atof(strtok(NULL, " \t"));
-            current_mtl->amb.v[2] = atof(strtok(NULL, " \t"));
+            current_mtl->amb[0] = atof(strtok(NULL, " \t"));
+            current_mtl->amb[1] = atof(strtok(NULL, " \t"));
+            current_mtl->amb[2] = atof(strtok(NULL, " \t"));
         }
-
         // diff
         else if (!strcmp(current_token, "Kd") && current_mtl != NULL) {
-            current_mtl->diff.v[0] = atof(strtok(NULL, " \t"));
-            current_mtl->diff.v[1] = atof(strtok(NULL, " \t"));
-            current_mtl->diff.v[2] = atof(strtok(NULL, " \t"));
+            current_mtl->diff[0] = atof(strtok(NULL, " \t"));
+            current_mtl->diff[1] = atof(strtok(NULL, " \t"));
+            current_mtl->diff[2] = atof(strtok(NULL, " \t"));
+            // printf("diff[%f,%f,%f]\n", current_mtl->diff[0], current_mtl->diff[1], current_mtl->diff[2]);
         }
-
+        // specular
+        else if (!strcmp(current_token, "Ke") && current_mtl != NULL) {
+            current_mtl->emit[0] = atof(strtok(NULL, " \t"));
+            current_mtl->emit[1] = atof(strtok(NULL, " \t"));
+            current_mtl->emit[2] = atof(strtok(NULL, " \t"));
+        }
         // specular
         else if (!strcmp(current_token, "Ks") && current_mtl != NULL) {
-            current_mtl->spec.v[0] = atof(strtok(NULL, " \t"));
-            current_mtl->spec.v[1] = atof(strtok(NULL, " \t"));
-            current_mtl->spec.v[2] = atof(strtok(NULL, " \t"));
+            current_mtl->spec[0] = atof(strtok(NULL, " \t"));
+            current_mtl->spec[1] = atof(strtok(NULL, " \t"));
+            current_mtl->spec[2] = atof(strtok(NULL, " \t"));
         }
         // shiny
         else if (!strcmp(current_token, "Ns") && current_mtl != NULL) {
-            current_mtl->shiny = atof(strtok(NULL, " \t"));
+            current_mtl->spec_exp = atof(strtok(NULL, " \t"));
         }
         // transparent
         else if (!strcmp(current_token, "d") && current_mtl != NULL) {
-            current_mtl->trans = atof(strtok(NULL, " \t"));
+            current_mtl->dissolved = atof(strtok(NULL, " \t"));
         }
-        // reflection
-        else if (!strcmp(current_token, "r") && current_mtl != NULL) {
-            current_mtl->reflect = atof(strtok(NULL, " \t"));
-        }
-        // glossy
-        else if (!strcmp(current_token, "sharpness") && current_mtl != NULL) {
-            current_mtl->glossy = atof(strtok(NULL, " \t"));
-        }
+        // // reflection
+        // else if (!strcmp(current_token, "r") && current_mtl != NULL) {
+        //     current_mtl->reflect = atof(strtok(NULL, " \t"));
+        // }
+        // // glossy
+        // else if (!strcmp(current_token, "sharpness") && current_mtl != NULL) {
+        //     current_mtl->glossy = atof(strtok(NULL, " \t"));
+        // }
         // refract index
         else if (!strcmp(current_token, "Ni") && current_mtl != NULL) {
             current_mtl->refract_index = atof(strtok(NULL, " \t"));
         }
         // illumination type
         else if (!strcmp(current_token, "illum") && current_mtl != NULL) {
+            current_mtl->model = atoi(strtok(NULL, " \t"));
         }
-        // texture map
-        else if (!strcmp(current_token, "map_Ka") && current_mtl != NULL) {
-            strncpy(current_mtl->texture_filename, strtok(NULL, " \t"), OBJ_FILENAME_LENGTH - 1);
-        } else {
+        // // texture map
+        // else if (!strcmp(current_token, "map_Ka") && current_mtl != NULL) {
+        //     strncpy(current_mtl->texture_filename, strtok(NULL, " \t"), OBJ_FILENAME_LENGTH - 1);
+        // }
+        else {
             PARSE_ERR("Unknown command in .mtl file.\n");
         }
     }
@@ -281,7 +284,17 @@ int obj_parse_obj_file(obj_growable_scene_data *growable_data, char *param_filen
         return 1;
     }
 
-    int current_material = -1;
+    // ADD DEFAULT MATERIAL
+    obj_material *missing_material = (obj_material *)malloc(sizeof(obj_material));
+    obj_set_material_defaults(missing_material);
+    missing_material->diff[0] = 1.0;  // bright pink
+    missing_material->diff[1] = 0.0;
+    missing_material->diff[2] = 1.0;
+    // get the name
+    strcpy(missing_material->name, "missing");
+    int missing_material_index = List_insert(&growable_data->material_list, missing_material);
+
+    int current_material_index = missing_material_index;
     char *current_token = NULL;
     char current_line[OBJ_LINE_SIZE];
 
@@ -311,19 +324,19 @@ int obj_parse_obj_file(obj_growable_scene_data *growable_data, char *param_filen
         // process face
         else if (!strcmp(current_token, "f")) {
             obj_face *face = obj_parse_face(growable_data);
-            face->material_index = current_material;
+            face->material_index = current_material_index;
             List_insert(&growable_data->face_list, face);
         }
         // light point source
         else if (!strcmp(current_token, "lp")) {
             obj_light_point *o = obj_parse_light_point(growable_data);
-            o->material_index = current_material;
+            o->material_index = current_material_index;
             List_insert(&growable_data->light_point_list, o);
         }
         // process light quad
         else if (!strcmp(current_token, "lq")) {
             obj_light_quad *o = obj_parse_light_quad(growable_data);
-            o->material_index = current_material;
+            o->material_index = current_material_index;
             List_insert(&growable_data->light_quad_list, o);
         }
         // camera
@@ -333,7 +346,10 @@ int obj_parse_obj_file(obj_growable_scene_data *growable_data, char *param_filen
         }
         // usemtl
         else if (!strcmp(current_token, "usemtl")) {
-            current_material = usemtl_find_material(&growable_data->material_list);
+            current_material_index = usemtl_find_material(&growable_data->material_list);
+            if (current_material_index < 0) {
+                current_material_index = missing_material_index;
+            }
         }
         // mtllib
         else if (!strcmp(current_token, "mtllib")) {
@@ -424,7 +440,10 @@ void obj_transfer_and_free(obj_scene_data *data_out, obj_growable_scene_data *gr
 
     // TRANSFER MATERIALS, NOT ALIGNING
     data_out->material_count = growable_data->material_list.item_count;
-    data_out->material_list = (obj_material **)growable_data->material_list.data;
+    size_t copy_size = data_out->material_count * sizeof(obj_material*);
+    data_out->material_list = (obj_material**)malloc(copy_size);
+    assert(data_out);
+    memcpy(data_out->material_list, growable_data->material_list.data, copy_size);
     List_free_self(&growable_data->material_list);
 
     // OTHER

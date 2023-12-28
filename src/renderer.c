@@ -6,9 +6,38 @@
 #include "math.h"
 #include "obj_parser.h"
 
-void ray_at(mfloat_t* out, ray_t* ray, mfloat_t t) {
-    vec3_multiply_f(out, ray->r.v, t);
-    vec3_add(out, ray->o.v, out);
+void Ray_at(mfloat_t* out, Ray* ray, mfloat_t t) {
+    vec3_multiply_f(out, ray->r, t);
+    vec3_add(out, ray->o, out);
+}
+
+mfloat_t random_frac() {
+    return rand() / ((mfloat_t)RAND_MAX);
+}
+
+void sphere_sample_uniform(mfloat_t* out) {
+    mfloat_t x, y, z, d;
+    do {
+        x = 2 * random_frac() - 1;
+        y = 2 * random_frac() - 1;
+        z = 2 * random_frac() - 1;
+        d = x * x + y * y + z * z;
+    } while (d > 1);
+    mfloat_t inv_l = 1.0 / MSQRT(d);
+    out[0] = x * inv_l;
+    out[1] = y * inv_l;
+    out[2] = z * inv_l;
+}
+
+void hemi_sample_uniform(mfloat_t* out, mfloat_t* normal_unit) {
+    sphere_sample_uniform(out);
+    double dotp = vec3_dot(out, normal_unit);
+    if (dotp < 0) {
+        // mirror out by normal
+        mfloat_t corr[VEC3_SIZE];
+        vec3_multiply_f(corr, normal_unit, -2 * dotp);
+        vec3_add(out, out, corr);
+    }
 }
 
 void barycentric_lincom(
@@ -99,7 +128,7 @@ int moeller_trumbore_intersect(
     return 1;
 }
 
-void intersect_face(obj_scene_data* scene, ray_t* ray, Intersection* hit, int faceIndex) {
+void intersect_face(obj_scene_data* scene, Ray* ray, Intersection* hit, int faceIndex) {
     obj_face* face = &scene->face_list[faceIndex];
 
     // loop over n-gon triangles fan-style
@@ -113,36 +142,43 @@ void intersect_face(obj_scene_data* scene, ray_t* ray, Intersection* hit, int fa
 
         mfloat_t t, u, v;
         int has_hit = moeller_trumbore_intersect(
-            ray->o.v, ray->r.v, A, B, C, &t, &u, &v);
+            ray->o, ray->r, A, B, C, &t, &u, &v);
 
         if (has_hit && t >= 0 && t < hit->distance) {
+            hit->has_hit = 1;
             hit->distance = t;
-            hit->material = face->material_index;
+            assert(face->material_index >= 0 && face->material_index < (int)scene->material_count);
+            hit->mat = scene->material_list[face->material_index];
             mfloat_t t = 1.0 - u - v;
-            barycentric_lincom(hit->position.v, A, B, C, t, u, v);
-            barycentric_lincom(hit->texture_coord.v,
+            barycentric_lincom(hit->position, A, B, C, t, u, v);
+            barycentric_lincom(hit->texture_coord,
                                scene->vertex_texture_list[a->texture].v,
                                scene->vertex_texture_list[b->texture].v,
                                scene->vertex_texture_list[c->texture].v,
                                t, u, v);
-            barycentric_lincom(hit->normal.v,
+            barycentric_lincom(hit->normal,
                                scene->vertex_normal_list[a->normal].v,
                                scene->vertex_normal_list[b->normal].v,
                                scene->vertex_normal_list[c->normal].v,
                                t, u, v);
-            vec3_normalize(hit->normal.v, hit->normal.v);
+            vec3_normalize(hit->normal, hit->normal);
+            if (vec3_dot(hit->normal, ray->r) > 0) {
+                // hit backside of face, mirror normal
+                vec3_multiply_f(hit->normal, hit->normal, -1);
+            }
         }
     }
 }
 
-void intersect(obj_scene_data* scene, ray_t* ray, Intersection* hit) {
+void intersect(obj_scene_data* scene, Ray* ray, Intersection* hit) {
+    hit->has_hit = 0;
     hit->distance = CLEAR_DISTANCE;
     for (size_t i = 0; i < scene->face_count; i++) {
         intersect_face(scene, ray, hit, i);
     }
 }
 
-void get_camera_ray(ray_t* ray, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
+void get_camera_ray(Ray* ray, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
     assert(scene->camera);
 
     // camera settings
@@ -178,41 +214,76 @@ void get_camera_ray(ray_t* ray, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
     // camera coordinate vector for pixel
     struct vec3 x = {.x = u, .y = v, .z = 1};
 
-    vec3_assign(ray->o.v, P->v);
-    vec3_multiply_mat3(ray->r.v, x.v, A.v);
-    vec3_normalize(ray->r.v, ray->r.v);
+    vec3_assign(ray->o, P->v);
+    vec3_multiply_mat3(ray->r, x.v, A.v);
+    vec3_normalize(ray->r, ray->r);
 }
 
-void render(struct vec3* pixel, obj_scene_data* scene, mfloat_t u, mfloat_t v) {
-    // printf("Render (%f, %f)", u, v);
+// offset new ray slightly from triangle in normal dir
+#define SAVE_RAY_EPS 1e-6
+void initialize_safe_ray(Ray* ray, mfloat_t* origin, mfloat_t *dir, mfloat_t* normal) {
+    vec3_multiply_f(ray->o, normal, SAVE_RAY_EPS);
+    vec3_add(ray->o, ray->o, origin);
+    vec3_assign(ray->r, dir);
+}
 
-    ray_t camera_ray;
-    get_camera_ray(&camera_ray, scene, u, v);
+void get_brdf(obj_material* mat, mfloat_t* out) {
+    mfloat_t distribution = 1 / MPI; // basic diffuse
+    vec3_assign(out, mat->diff);
+    vec3_multiply_f(out, out, distribution);
+}
 
+#define SAMPLES 500
+// #define BOUNCES 5
+#define RR_PROB_MAX 0.99
+
+void integrate_Li(mfloat_t* light, obj_scene_data* scene, Ray* v_inv, int depth, mfloat_t* throughput) {
     Intersection hit;
-    intersect(scene, &camera_ray, &hit);
-
-    pixel->r = pixel->g = pixel->b = 0;
-
-    int hit_sky = hit.distance >= CLEAR_DISTANCE;
-    if (hit_sky) {
+    intersect(scene, v_inv, &hit);
+    if (!hit.has_hit) {
         return;
     }
 
-    vec3_assign(pixel->v, hit.normal.v);
-    vec3_multiply_f(pixel->v, pixel->v, 0.5);
-    vec3_add_f(pixel->v, pixel->v, 0.5);
+    vec3_add(light, light, hit.mat->emit);
 
-    // // DEPTH
-    // mfloat_t far = 5000;
-    // mfloat_t near = 0;
-    // mfloat_t b = (hit.distance - near) / (far - near);
-    // *pixel = (struct vec3){.v={b, b, b}};
+    mfloat_t rr_prob = MFMIN(vec3_max_component(throughput), RR_PROB_MAX);
+    if (random_frac() >= rr_prob) {
+        return; // ray dies
+    }
 
-    // // HAS HIT
-    // if (hit.distance >= 0) {
-    //     *pixel = (vec3_t){0, 0, 0};
-    // } else {
-    //     *pixel = (vec3_t){0, 0, 0};
-    // }
+    mfloat_t omega_i[VEC3_SIZE];
+    mfloat_t prob_i = 1 / (2 * MPI); // because even distribution
+    hemi_sample_uniform(omega_i, hit.normal);
+
+    Ray bounce_ray;
+    initialize_safe_ray(&bounce_ray, hit.position, omega_i, hit.normal);
+
+    mfloat_t brdf[VEC3_SIZE], next_throughput[VEC3_SIZE], bounce_light[VEC3_SIZE];
+
+    mfloat_t cosTheta = vec3_dot(hit.normal, omega_i);
+    get_brdf(hit.mat, brdf);
+
+    vec3_multiply(next_throughput, throughput, brdf);
+    vec3_multiply_f(next_throughput, next_throughput, cosTheta / (prob_i * rr_prob));
+
+    // recurse
+    vec3_zero(bounce_light);
+    integrate_Li(bounce_light, scene, &bounce_ray, depth + 1, next_throughput);
+
+    vec3_multiply(bounce_light, bounce_light, brdf);
+    vec3_multiply_f(bounce_light, bounce_light, cosTheta / (prob_i * rr_prob));
+    vec3_add(light, light, bounce_light);
+}
+
+void render(mfloat_t* color, obj_scene_data* scene, mfloat_t u, mfloat_t v, int samples) {
+    vec3_zero(color);
+    Ray camera_ray;
+    get_camera_ray(&camera_ray, scene, u, v);
+    mfloat_t initial_throughput[VEC3_SIZE];
+    vec3_one(initial_throughput);
+
+    for (int i = 0; i < samples; i++) {
+        integrate_Li(color, scene, &camera_ray, 0, initial_throughput);
+    }
+    vec3_divide_f(color, color, (mfloat_t)samples);
 }

@@ -38,16 +38,9 @@ typedef struct {
 
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
-    char texture_filename[OBJ_FILENAME_LENGTH];
-    struct vec3 amb;
-    struct vec3 diff;
-    struct vec3 spec;
-    mfloat_t reflect;
-    mfloat_t refract;
-    mfloat_t trans;
-    mfloat_t shiny;
-    mfloat_t glossy;
-    mfloat_t refract_index;
+    mfloat_t amb[VEC3_SIZE], diff[VEC3_SIZE], spec[VEC3_SIZE], emit[VEC3_SIZE];
+    mfloat_t spec_exp, dissolved, refract_index;
+    int model;
 } obj_material;
 
 typedef struct {

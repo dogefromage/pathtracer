@@ -1048,6 +1048,12 @@ mfloat_t *vec3_zero(mfloat_t *result) {
     result[2] = MFLOAT_C(0.0);
     return result;
 }
+mfloat_t *vec3_const(mfloat_t *result, mfloat_t v) {
+    result[0] = MFLOAT_C(v);
+    result[1] = MFLOAT_C(v);
+    result[2] = MFLOAT_C(v);
+    return result;
+}
 
 mfloat_t *vec3_one(mfloat_t *result) {
     result[0] = MFLOAT_C(1.0);
@@ -1318,6 +1324,10 @@ mfloat_t *vec3_bezier4(mfloat_t *result, mfloat_t *v0, mfloat_t *v1, mfloat_t *v
     vec3_lerp(tmp4, tmp1, tmp2, f);
     vec3_lerp(result, tmp3, tmp4, f);
     return result;
+}
+
+mfloat_t vec3_max_component(mfloat_t *v) {
+    return MFMAX(MFMAX(v[0], v[1]), v[2]);
 }
 
 mfloat_t vec3_length(mfloat_t *v0) {
