@@ -47,16 +47,16 @@ typedef struct {
     int position, target, updir;
 } obj_camera;
 
-typedef struct {
-    int pos_index;
-    int material_index;
-} obj_light_point;
+// typedef struct {
+//     int pos_index;
+//     int material_index;
+// } obj_light_point;
 
-typedef struct {
-    size_t vertex_count;
-    int vertices[MAX_NGON_SIZE];
-    int material_index;
-} obj_light_quad;
+// typedef struct {
+//     size_t vertex_count;
+//     int vertices[MAX_NGON_SIZE];
+//     int material_index;
+// } obj_light_quad;
 
 typedef struct {
     List vertex_list;
@@ -65,8 +65,8 @@ typedef struct {
 
     List face_list;
 
-    List light_point_list;
-    List light_quad_list;
+    // List light_point_list;
+    // List light_quad_list;
 
     List material_list;
 
@@ -85,11 +85,11 @@ typedef struct {
     obj_face *face_list;
     size_t face_count;
 
-    // also keep lights aligned
-    obj_light_point *light_point_list;
-    obj_light_quad *light_quad_list;
-    size_t light_point_count;
-    size_t light_quad_count;
+    // // also keep lights aligned
+    // obj_light_point *light_point_list;
+    // obj_light_quad *light_quad_list;
+    // size_t light_point_count;
+    // size_t light_quad_count;
 
     // materials are too large, keep pointers in array
     obj_material **material_list;

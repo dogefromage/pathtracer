@@ -84,27 +84,27 @@ obj_face *obj_parse_face(obj_growable_scene_data *scene) {
     return face;
 }
 
-obj_light_point *obj_parse_light_point(obj_growable_scene_data *scene) {
-    obj_light_point *o = (obj_light_point *)malloc(sizeof(obj_light_point));
-    obj_parse_simple_index(strtok(NULL, WHITESPACE), &o->pos_index, scene->vertex_list.item_count);
-    return o;
-}
+// obj_light_point *obj_parse_light_point(obj_growable_scene_data *scene) {
+//     obj_light_point *o = (obj_light_point *)malloc(sizeof(obj_light_point));
+//     obj_parse_simple_index(strtok(NULL, WHITESPACE), &o->pos_index, scene->vertex_list.item_count);
+//     return o;
+// }
 
-obj_light_quad *obj_parse_light_quad(obj_growable_scene_data *scene) {
-    obj_light_quad *o = (obj_light_quad *)malloc(sizeof(obj_light_quad));
+// obj_light_quad *obj_parse_light_quad(obj_growable_scene_data *scene) {
+//     obj_light_quad *o = (obj_light_quad *)malloc(sizeof(obj_light_quad));
 
-    char *token;
-    int vertex_count = 0;
-    while ((token = strtok(NULL, WHITESPACE)) != NULL) {
-        if (vertex_count >= MAX_NGON_SIZE) {
-            PARSE_ERR("Encountered too many verts in list.\n");
-        }
-        obj_parse_simple_index(token, &o->vertices[vertex_count], scene->vertex_list.item_count);
-        vertex_count++;
-    }
-    o->vertex_count = vertex_count;
-    return o;
-}
+//     char *token;
+//     int vertex_count = 0;
+//     while ((token = strtok(NULL, WHITESPACE)) != NULL) {
+//         if (vertex_count >= MAX_NGON_SIZE) {
+//             PARSE_ERR("Encountered too many verts in list.\n");
+//         }
+//         obj_parse_simple_index(token, &o->vertices[vertex_count], scene->vertex_list.item_count);
+//         vertex_count++;
+//     }
+//     o->vertex_count = vertex_count;
+//     return o;
+// }
 
 struct vec3 *obj_parse_vector() {
     struct vec3 *vec = (struct vec3 *)calloc(1, sizeof(struct vec3));
@@ -327,18 +327,18 @@ int obj_parse_obj_file(obj_growable_scene_data *growable_data, char *param_filen
             face->material_index = current_material_index;
             List_insert(&growable_data->face_list, face);
         }
-        // light point source
-        else if (!strcmp(current_token, "lp")) {
-            obj_light_point *o = obj_parse_light_point(growable_data);
-            o->material_index = current_material_index;
-            List_insert(&growable_data->light_point_list, o);
-        }
-        // process light quad
-        else if (!strcmp(current_token, "lq")) {
-            obj_light_quad *o = obj_parse_light_quad(growable_data);
-            o->material_index = current_material_index;
-            List_insert(&growable_data->light_quad_list, o);
-        }
+        // // light point source
+        // else if (!strcmp(current_token, "lp")) {
+        //     obj_light_point *o = obj_parse_light_point(growable_data);
+        //     o->material_index = current_material_index;
+        //     List_insert(&growable_data->light_point_list, o);
+        // }
+        // // process light quad
+        // else if (!strcmp(current_token, "lq")) {
+        //     obj_light_quad *o = obj_parse_light_quad(growable_data);
+        //     o->material_index = current_material_index;
+        //     List_insert(&growable_data->light_quad_list, o);
+        // }
         // camera
         else if (!strcmp(current_token, "c")) {
             growable_data->camera = (obj_camera *)malloc(sizeof(obj_camera));
@@ -379,8 +379,8 @@ void obj_init_temp_storage(obj_growable_scene_data *growable_data) {
 
     List_init(&growable_data->face_list);
 
-    List_init(&growable_data->light_point_list);
-    List_init(&growable_data->light_quad_list);
+    // List_init(&growable_data->light_point_list);
+    // List_init(&growable_data->light_quad_list);
 
     List_init(&growable_data->material_list);
 
@@ -403,8 +403,8 @@ void obj_transfer_and_free(obj_scene_data *data_out, obj_growable_scene_data *gr
     data_out->vertex_normal_count = growable_data->vertex_normal_list.item_count;
     data_out->vertex_texture_count = growable_data->vertex_texture_list.item_count;
     data_out->face_count = growable_data->face_list.item_count;
-    data_out->light_point_count = growable_data->light_point_list.item_count;
-    data_out->light_quad_count = growable_data->light_quad_list.item_count;
+    // data_out->light_point_count = growable_data->light_point_list.item_count;
+    // data_out->light_quad_count = growable_data->light_quad_list.item_count;
 
     obj_copy_and_align_indirect_data((void **)&data_out->vertex_list,
                                      growable_data->vertex_list.data,
@@ -422,21 +422,21 @@ void obj_transfer_and_free(obj_scene_data *data_out, obj_growable_scene_data *gr
                                      growable_data->face_list.data,
                                      growable_data->face_list.item_count,
                                      sizeof(obj_face));
-    obj_copy_and_align_indirect_data((void **)&data_out->light_point_list,
-                                     growable_data->light_point_list.data,
-                                     growable_data->light_point_list.item_count,
-                                     sizeof(obj_light_point));
-    obj_copy_and_align_indirect_data((void **)&data_out->light_quad_list,
-                                     growable_data->light_quad_list.data,
-                                     growable_data->light_quad_list.item_count,
-                                     sizeof(obj_light_quad));
+    // obj_copy_and_align_indirect_data((void **)&data_out->light_point_list,
+    //                                  growable_data->light_point_list.data,
+    //                                  growable_data->light_point_list.item_count,
+    //                                  sizeof(obj_light_point));
+    // obj_copy_and_align_indirect_data((void **)&data_out->light_quad_list,
+    //                                  growable_data->light_quad_list.data,
+    //                                  growable_data->light_quad_list.item_count,
+    //                                  sizeof(obj_light_quad));
 
     List_free_full(&growable_data->vertex_list);
     List_free_full(&growable_data->vertex_normal_list);
     List_free_full(&growable_data->vertex_texture_list);
     List_free_full(&growable_data->face_list);
-    List_free_full(&growable_data->light_point_list);
-    List_free_full(&growable_data->light_quad_list);
+    // List_free_full(&growable_data->light_point_list);
+    // List_free_full(&growable_data->light_quad_list);
 
     // TRANSFER MATERIALS, NOT ALIGNING
     data_out->material_count = growable_data->material_list.item_count;
@@ -530,18 +530,18 @@ void obj_growable_fprint(FILE *stream, obj_growable_scene_data *data) {
         struct vec3 *v = (struct vec3 *)(data->vertex_texture_list.data[i]);
         fprintf(stream, "vt %f %f %f\n", v->x, v->y, v->z);
     }
-    for (size_t i = 0; i < data->light_point_list.item_count; i++) {
-        obj_light_point *lp = (obj_light_point *)data->light_point_list.data[i];
-        fprintf(stream, "lp %d\n", lp->pos_index + 1);
-    }
-    for (size_t i = 0; i < data->light_quad_list.item_count; i++) {
-        obj_light_quad *lq = (obj_light_quad *)data->light_quad_list.data[i];
-        fprintf(stream, "lq");
-        for (size_t j = 0; j < lq->vertex_count; j++) {
-            fprintf(stream, " %d", lq->vertices[j] + 1);
-        }
-        fprintf(stream, "\n");
-    }
+    // for (size_t i = 0; i < data->light_point_list.item_count; i++) {
+    //     obj_light_point *lp = (obj_light_point *)data->light_point_list.data[i];
+    //     fprintf(stream, "lp %d\n", lp->pos_index + 1);
+    // }
+    // for (size_t i = 0; i < data->light_quad_list.item_count; i++) {
+    //     obj_light_quad *lq = (obj_light_quad *)data->light_quad_list.data[i];
+    //     fprintf(stream, "lq");
+    //     for (size_t j = 0; j < lq->vertex_count; j++) {
+    //         fprintf(stream, " %d", lq->vertices[j] + 1);
+    //     }
+    //     fprintf(stream, "\n");
+    // }
     for (size_t i = 0; i < data->face_list.item_count; i++) {
         obj_face *f = (obj_face *)data->face_list.data[i];
         fprintf(stream, "f");
@@ -575,18 +575,18 @@ void obj_scene_data_fprint(FILE *stream, obj_scene_data *data) {
         struct vec3 *v = &data->vertex_texture_list[i];
         fprintf(stream, "vt %f %f %f\n", v->x, v->y, v->z);
     }
-    for (size_t i = 0; i < data->light_point_count; i++) {
-        obj_light_point *lp = &data->light_point_list[i];
-        fprintf(stream, "lp %d\n", lp->pos_index + 1);
-    }
-    for (size_t i = 0; i < data->light_quad_count; i++) {
-        obj_light_quad *lq = &data->light_quad_list[i];
-        fprintf(stream, "lq");
-        for (size_t j = 0; j < lq->vertex_count; j++) {
-            fprintf(stream, " %d", lq->vertices[j] + 1);
-        }
-        fprintf(stream, "\n");
-    }
+    // for (size_t i = 0; i < data->light_point_count; i++) {
+    //     obj_light_point *lp = &data->light_point_list[i];
+    //     fprintf(stream, "lp %d\n", lp->pos_index + 1);
+    // }
+    // for (size_t i = 0; i < data->light_quad_count; i++) {
+    //     obj_light_quad *lq = &data->light_quad_list[i];
+    //     fprintf(stream, "lq");
+    //     for (size_t j = 0; j < lq->vertex_count; j++) {
+    //         fprintf(stream, " %d", lq->vertices[j] + 1);
+    //     }
+    //     fprintf(stream, "\n");
+    // }
     for (size_t i = 0; i < data->face_count; i++) {
         obj_face *f = &data->face_list[i];
         fprintf(stream, "f");
@@ -633,15 +633,15 @@ void delete_obj_data(obj_scene_data *data) {
     free(data->vertex_list);
     free(data->vertex_normal_list);
     free(data->vertex_texture_list);
-    free(data->light_point_list);
-    free(data->light_quad_list);
+    // free(data->light_point_list);
+    // free(data->light_quad_list);
     free(data->face_list);
     free(data->camera);
     data->vertex_list = NULL;
     data->vertex_normal_list = NULL;
     data->vertex_texture_list = NULL;
-    data->light_point_list = NULL;
-    data->light_quad_list = NULL;
+    // data->light_point_list = NULL;
+    // data->light_quad_list = NULL;
     data->face_list = NULL;
     data->camera = NULL;
 }

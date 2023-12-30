@@ -1,4 +1,4 @@
-
+#pragma once
 
 // : disable implementations using mint_t.
 #define MATHC_NO_INT

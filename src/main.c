@@ -6,6 +6,7 @@
 #include "mathc.h"
 #include "obj_parser.h"
 #include "renderer.h"
+#include "bvh.h"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -18,24 +19,28 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    BVH bvh;
+    bvh_build(&bvh, &scene);
+
     // render image
     int factor = 1;
     int width = 400 * factor;
     int height = 300 * factor;
+
+    int samples = 200;
+    int samples_per_paint = 10;
+
     struct vec3* img = (struct vec3*)calloc(sizeof(struct vec3), width * height);
     assert(img);
 
-    int outer_samples = 50;
-    int inner_samples = 10;
-
-    for (int i = 0; i < outer_samples; i++) {
+    for (int i = 0; i < samples; i += samples_per_paint) {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 mfloat_t u = (2 * x - width) / (mfloat_t)height;
                 mfloat_t v = (2 * y - height) / (mfloat_t)height;
 
                 mfloat_t result[VEC3_SIZE];
-                render(result, &scene, u, v, inner_samples);
+                render(result, &bvh, &scene, u, v, samples_per_paint);
 
                 mfloat_t* pixel = img[y * width + x].v;
 
