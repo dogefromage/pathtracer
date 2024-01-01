@@ -2,11 +2,11 @@
 #include <stdlib.h>
 
 #include "assert.h"
+#include "bvh.h"
 #include "image.h"
 #include "mathc.h"
 #include "obj_parser.h"
 #include "renderer.h"
-#include "bvh.h"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -23,17 +23,20 @@ int main(int argc, char* argv[]) {
     bvh_build(&bvh, &scene);
 
     // render image
-    int factor = 1;
+    int factor = 2;
     int width = 400 * factor;
     int height = 300 * factor;
 
     int samples = 200;
-    int samples_per_paint = 10;
+    int samples_per_paint = 20;
 
     struct vec3* img = (struct vec3*)calloc(sizeof(struct vec3), width * height);
     assert(img);
 
-    for (int i = 0; i < samples; i += samples_per_paint) {
+    renderer_init();
+
+    int bigIterations = samples / samples_per_paint;
+    for (int i = 0; i < bigIterations; i++) {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 mfloat_t u = (2 * x - width) / (mfloat_t)height;
@@ -49,6 +52,8 @@ int main(int argc, char* argv[]) {
                 vec3_add(pixel, pixel, result);
             }
         }
+
+        renderer_print_info(width * height);
         write_bmp(img, width, height, "render.bmp");
     }
 

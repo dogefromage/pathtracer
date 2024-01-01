@@ -20,6 +20,8 @@ the following restrictions:
 
 #include "mathc.h"
 
+#include <x86intrin.h>
+
 #if defined(MATHC_USE_INT)
 mint_t clampi(mint_t value, mint_t min, mint_t max) {
     if (value < min) {
@@ -1232,7 +1234,6 @@ mfloat_t *vec3_cross(mfloat_t *result, mfloat_t *v0, mfloat_t *v1) {
     result[2] = cross[2];
     return result;
 }
-
 
 mfloat_t *vec3_normalize(mfloat_t *result, mfloat_t *v0) {
     mfloat_t invL = 1.0 / (MSQRT(v0[0] * v0[0] + v0[1] * v0[1] + v0[2] * v0[2]));

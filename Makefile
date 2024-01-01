@@ -6,7 +6,7 @@
 # Compiler and compiler flags
 CC = gcc
 OPTIMIZATION_FLAGS= -O2
-CFLAGS = -Wall -Wextra -g -I./include -std=gnu99 # $(OPTIMIZATION_FLAGS)
+CFLAGS = -Wall -Wextra -g -I./include -std=gnu99 $(OPTIMIZATION_FLAGS)
 
 # Directories
 SRC_DIR = src

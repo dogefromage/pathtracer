@@ -2,9 +2,13 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "math.h"
 #include "obj_parser.h"
+
+uint64_t intersectionCalls, samplesPixels, rayBounces, rayCreations;
+clock_t startTime;
 
 mfloat_t random_frac() {
     return rand() / ((mfloat_t)RAND_MAX);
@@ -23,6 +27,7 @@ void sphere_sample_uniform(mfloat_t* out) {
     out[1] = y * inv_l;
     out[2] = z * inv_l;
 }
+
 
 void hemi_sample_uniform(mfloat_t* out, mfloat_t* normal_unit) {
     sphere_sample_uniform(out);
@@ -92,6 +97,7 @@ void get_brdf(obj_material* mat, mfloat_t* out) {
 
 // IT WORKS!!!
 void intersect(BVH* bvh, obj_scene_data* scene, Ray* ray, Intersection* hit) {
+    intersectionCalls++;
     hit->has_hit = 0;
     hit->distance = CLEAR_DISTANCE;
 #if 0
@@ -134,14 +140,17 @@ void integrate_Li(mfloat_t* light, BVH* bvh, obj_scene_data* scene, Ray* v_inv, 
 
     // recurse
     vec3_zero(bounce_light);
+    rayBounces++;
     integrate_Li(bounce_light, bvh, scene, &bounce_ray, depth + 1, next_throughput);
 
     vec3_multiply(bounce_light, bounce_light, brdf);
     vec3_multiply_f(bounce_light, bounce_light, cosTheta / (prob_i * rr_prob));
+
     vec3_add(light, light, bounce_light);
 }
 
 void render(mfloat_t* color, BVH* bvh, obj_scene_data* scene, mfloat_t u, mfloat_t v, int samples) {
+    samplesPixels += samples;
     vec3_zero(color);
     Ray camera_ray;
     get_camera_ray(&camera_ray, scene, u, v);
@@ -149,7 +158,27 @@ void render(mfloat_t* color, BVH* bvh, obj_scene_data* scene, mfloat_t u, mfloat
     vec3_one(initial_throughput);
 
     for (int i = 0; i < samples; i++) {
+        rayCreations++;
         integrate_Li(color, bvh, scene, &camera_ray, 0, initial_throughput);
     }
     vec3_divide_f(color, color, (mfloat_t)samples);
+}
+
+void renderer_init() {
+    intersectionCalls = samplesPixels = rayCreations = rayBounces = 0;
+    startTime = clock();
+}
+void renderer_print_info(uint64_t numPixels) {
+    clock_t endTime = clock();
+    double totalSeconds = ((double)(endTime - startTime)) / CLOCKS_PER_SEC;
+
+    uint64_t samples = samplesPixels / numPixels;
+
+    double samplesPerSecond = samples / totalSeconds;
+    uint64_t intersectionsPerSecond = (uint64_t)(intersectionCalls / totalSeconds);
+
+    double avgBounces = rayBounces / (double)rayCreations;
+
+    printf("samples: %lu, seconds: %.2f, samples/s: %.2f, intersections/s: %lu, avg bounces: %.2f\n",
+           samples, totalSeconds, samplesPerSecond, intersectionsPerSecond, avgBounces);
 }

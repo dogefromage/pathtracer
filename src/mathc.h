@@ -29,7 +29,7 @@ the following restrictions:
 #include <float.h>
 
 #define MATHC_VERSION_YYYY 2019
-#define MATHC_VERSION_MM 02
+#define MATHC_VERSION_MM 02 
 #define MATHC_VERSION_DD 16
 #define MATHC_VERSION_MICRO 0
 
