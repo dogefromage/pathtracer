@@ -1,6 +1,6 @@
 #pragma once
 #include "mathc.h"
-#include "obj_parser.h"
+#include "scene.h"
 
 #define CLEAR_DISTANCE 1e30
 
@@ -15,5 +15,8 @@ typedef struct {
     obj_material* mat;
 } Intersection;
 
-void intersect_face(obj_scene_data* scene, Ray* ray, Intersection* hit, int faceIndex);
-void intersect_crude(obj_scene_data* scene, Ray* ray, Intersection* hit);
+__device__ void 
+intersect_face(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit, int faceIndex);
+
+__device__ void 
+intersect_crude(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit);
