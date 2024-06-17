@@ -181,7 +181,6 @@ uint32_t split_by_median(bvh_t* bvh, bvh_node_t* node, int count, bvh_stats_t* s
 //     return i;
 // }
 
-
 static mfloat_t
 evaluate_sah(const obj_scene_data* scene,
              bvh_t* bvh, bvh_node_t* node, int axis, mfloat_t splitPos) {
@@ -205,7 +204,64 @@ evaluate_sah(const obj_scene_data* scene,
     return cost > 0 ? cost : 1e30;
 }
 
-// https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+static mfloat_t
+find_split_plane_centroids(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
+                           int* bestAxis, mfloat_t* bestSplit) {
+    mfloat_t bestCost = 1e30;
+    for (int a = 0; a < 3; a++) {
+        for (uint32_t i = node->start; i < node->end; i++) {
+            mfloat_t candidate = bvh->centroids[bvh->indices[i]].v[a];
+            mfloat_t cost = evaluate_sah(scene, bvh, node, a, candidate);
+            if (cost < bestCost) {
+                *bestAxis = a;
+                *bestSplit = candidate;
+                bestCost = cost;
+            }
+        }
+    }
+    assert(*bestAxis >= 0);
+    return bestCost;
+}
+
+static mfloat_t
+find_best_split_plane_bands(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
+                      int* bestAxis, mfloat_t* bestSplit, int numBands) {
+    mfloat_t bestCost = 1e30;
+    for (int a = 0; a < 3; a++) {
+        mfloat_t boundsMin = node->bounds.min[a];
+        mfloat_t boundsMax = node->bounds.max[a];
+        if (boundsMin == boundsMax) {
+            continue;
+        }
+        mfloat_t scale = (boundsMax - boundsMin) / numBands;
+        for (int i = 1; i < numBands; i++) {
+            mfloat_t candidate = boundsMin + i * scale;
+            // mfloat_t candidate = bvh->centroids[bvh->indices[i]].v[a];
+            mfloat_t cost = evaluate_sah(scene, bvh, node, a, candidate);
+            if (cost < bestCost) {
+                *bestAxis = a;
+                *bestSplit = candidate;
+                bestCost = cost;
+            }
+        }
+    }
+    assert(*bestAxis >= 0);
+    return bestCost;
+}
+
+#define N_BANDS 100
+
+static mfloat_t
+find_best_split_plane(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
+                      int* bestAxis, mfloat_t* bestSplit) {
+    int count = node->end - node->start;
+    if (count < N_BANDS) {
+        return find_split_plane_centroids(scene, bvh, node, bestAxis, bestSplit);
+    } else {
+        return find_best_split_plane_bands(scene, bvh, node, bestAxis, bestSplit, N_BANDS);
+    }
+}
+
 static void
 subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats_t* stats) {
     bvh_node_t* node = &bvh->nodes[nodeIndex];
@@ -213,24 +269,12 @@ subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats
     if (count <= 2) {
         return;  // stop criterion
     }
-
     // uint32_t i = split_by_average(bvh, node, count, stats);
     // uint32_t i = split_by_median(bvh, node, count, stats);
 
     int bestAxis = -1;
-    mfloat_t bestPos = 0, bestCost = 1e30;
-    for (int axis = 0; axis < 3; axis++) {
-        for (uint32_t i = node->start; i < node->end; i++) {
-            mfloat_t pos = bvh->centroids[bvh->indices[i]].v[axis];
-            mfloat_t cost = evaluate_sah(scene, bvh, node, axis, pos);
-            if (cost < bestCost) {
-                bestAxis = axis;
-                bestCost = cost;
-                bestPos = pos;
-            }
-        }
-    }
-    assert(bestAxis >= 0);
+    mfloat_t bestPos = 0;
+    mfloat_t bestCost = find_best_split_plane(scene, bvh, node, &bestAxis, &bestPos);
 
     // partitioning
     int i = node->start;
@@ -245,7 +289,7 @@ subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats
 
     int leftCount = i - node->start;
     if (leftCount == 0 || leftCount == count) {
-        printf("Skipped split\n");
+        // printf("Skipped split\n");
         stats->totalSkippedFaces += count;
         return;
     }
@@ -258,8 +302,17 @@ subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats
     left->end = right->start = i;
     right->end = node->end;
 
-    printf("Split: %u => %u / %u\n", left->start, left->end - left->start, right->end - right->start);
-    
+    // printf("Split: %u => %u / %u\n", left->start, left->end - left->start, right->end - right->start);
+
+    time_t currTime;
+    time(&currTime);
+    double elapsed_seconds = difftime(currTime, stats->lastInfo);
+    if (elapsed_seconds > 1.0) {
+        printf("created %u bvh nodes (of at most %d)\n", bvh->nodeCount, bvh->maxNodeCount);
+        stats->lastInfo = currTime;
+    }
+
+
     node->leftChild = leftIndex;
     node->rightChild = rightIndex;
     node->start = node->end = 0;  // make non-leaf
@@ -302,6 +355,7 @@ bvh_build(bvh_t* bvh, const obj_scene_data* scene) {
 
     bvh_stats_t stats;
     memset(&stats, 0, sizeof(bvh_stats_t));
+    time(&stats.lastInfo);
 
     bvh->primitiveCount = scene->face_count;
     bvh->maxNodeCount = 2 * bvh->primitiveCount - 1;
@@ -438,10 +492,6 @@ bvh_intersect(const __restrict__ bvh_t* bvh, uint32_t nodeIndex,
 __host__ __device__ void
 bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
                         const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit) {
-    // for (size_t i = 0; i < scene->face_count; i++) {
-    // for (size_t i = 0; i < bvh->primitiveCount; i++) {
-    //     intersect_face(scene, ray, hit, i);
-    // }
 
     int stack[TRAVERSAL_STACK_SIZE];
     int depth = 0;

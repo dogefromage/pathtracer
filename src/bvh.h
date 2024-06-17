@@ -23,6 +23,7 @@ typedef struct {
 typedef struct {
     uint32_t totalSkippedFaces, numberLeaves;
     float averageLeafSize;
+    time_t lastInfo;    
 } bvh_stats_t;
 
 #define BVH_ROOT_NODE 0

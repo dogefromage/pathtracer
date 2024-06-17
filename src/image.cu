@@ -19,7 +19,6 @@ void color_correct(mfloat_t* c) {
     vec3_multiply_f(c, c, 1);
 }
 
-// https://stackoverflow.com/questions/27613601/rendering-an-image-using-c
 void write_bmp(struct vec3* pixels, int width, int height, const char* filename) {
     unsigned int header[14];
     int i, j;

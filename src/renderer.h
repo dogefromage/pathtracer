@@ -9,6 +9,8 @@ typedef struct {
     size_t width, height,
         seed,
         samples, samples_per_round;
+        
+    mfloat_t sensor_height, focal_length;
 } render_settings_t;
 
 #ifdef USE_CPU_RENDER

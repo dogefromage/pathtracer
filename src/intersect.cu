@@ -20,9 +20,6 @@ barycentric_lincom(
 
 #define TRIANGLE_DETERMINANT_EPS 1e-12
 #define TRIANGLE_MARGIN_EPS 1e-12
-// super fast Möller Trumbore ray-triangle intersection
-// https://cadxfem.org/inf/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
-// https://www.youtube.com/watch?v=fK1RPmF_zjQ
 static __host__ __device__ int 
 moeller_trumbore_intersect(
     const mfloat_t* orig, const mfloat_t* dir,

@@ -54,11 +54,8 @@ public:
 };
 
 static __host__ __device__ void
-get_camera_ray(Ray* ray, const __restrict__ obj_scene_data* scene, mfloat_t u, mfloat_t v) {
-    // camera settings
-    mfloat_t sensor_height = 0.2,
-             focal_length = 0.25;
-
+get_camera_ray(Ray* ray, const __restrict__ obj_scene_data* scene, 
+    mfloat_t u, mfloat_t v, render_settings_t* settings) {
     struct vec3 U, V, W,
         *P = &scene->vertex_list[scene->camera.position],
         *T = &scene->vertex_list[scene->camera.target],
@@ -72,9 +69,9 @@ get_camera_ray(Ray* ray, const __restrict__ obj_scene_data* scene, mfloat_t u, m
     vec3_normalize(V.v, V.v);
     vec3_normalize(W.v, W.v);
 
-    vec3_multiply_f(U.v, U.v, 0.5 * sensor_height);
-    vec3_multiply_f(V.v, V.v, 0.5 * sensor_height);
-    vec3_multiply_f(W.v, W.v, focal_length);
+    vec3_multiply_f(U.v, U.v, 0.5 * settings->sensor_height);
+    vec3_multiply_f(V.v, V.v, 0.5 * settings->sensor_height);
+    vec3_multiply_f(W.v, W.v, settings->focal_length);
 
     // U, V, W build orthogonal basis for camera ray direction
     // D = u*U + v*V + 1*W
@@ -292,7 +289,7 @@ render_host(struct vec3* img,
         mfloat_t v = (2 * sensor_y - settings.height) / (mfloat_t)settings.height;
 
         Ray camera_ray;
-        get_camera_ray(&camera_ray, scene, u, v);
+        get_camera_ray(&camera_ray, scene, u, v, &settings);
 
         integrate_Li_iterative(current_light, bvh, scene, camera_ray, &rand);
         vec3_add(total_light, total_light, current_light);
@@ -339,7 +336,7 @@ render_kernel(struct vec3* img,
         mfloat_t v = (2 * sensor_y - settings.height) / (mfloat_t)settings.height;
 
         Ray camera_ray;
-        get_camera_ray(&camera_ray, scene, u, v);
+        get_camera_ray(&camera_ray, scene, u, v, &settings);
 
         integrate_Li_iterative(current_light, bvh, scene, camera_ray, &rand);
         vec3_add(total_light, total_light, current_light);

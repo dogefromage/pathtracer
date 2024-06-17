@@ -133,11 +133,15 @@ int main(int argc, char* argv[]) {
     render_settings_t settings;
     // settings.width = 300;
     // settings.height = 300;
-    settings.width = 1500;
-    settings.height = 1500;
-    settings.samples = 100;
-    settings.samples_per_round = 10;
+    settings.width = 1800;
+    settings.height = 1800;
+    settings.samples = 300;
+    settings.samples_per_round = 20;
     settings.seed = 69;
+    // camera
+    // settings.focal_length = 1.5;
+    settings.focal_length = 0.4;
+    settings.sensor_height = 0.2;
 
     bvh_t h_bvh;
     bvh_build(&h_bvh, &h_scene);
