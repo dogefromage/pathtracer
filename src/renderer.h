@@ -5,14 +5,25 @@
 #include "mathc.h"
 #include "scene.h"
 
-// void hemi_sample_uniform(mfloat_t* out, mfloat_t* normal_unit);
-// void sphere_sample_uniform(mfloat_t* out);
-// void get_camera_ray(Ray* ray, obj_scene_data* scene, mfloat_t u, mfloat_t v);
+typedef struct {
+    size_t width, height,
+        seed,
+        samples, samples_per_round;
+} render_settings_t;
+
+#ifdef USE_CPU_RENDER
+
+__host__ void
+render_host(struct vec3* img,
+       const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+       int pixel_x, int pixel_y,
+       render_settings_t settings, int previous_samples);
+
+#else
 
 __global__ void
-render(struct vec3* img,
-       const __restrict__ BVH* bvh, const __restrict__ obj_scene_data* scene,
-       int width, int height, int seed, int samples, int previous_samples);
+render_kernel(struct vec3* img,
+       const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+       render_settings_t settings, int previous_samples);
 
-// void renderer_init();
-// void renderer_print_info(uint64_t numPixels);
+#endif

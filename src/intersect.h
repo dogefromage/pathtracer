@@ -15,8 +15,8 @@ typedef struct {
     obj_material* mat;
 } Intersection;
 
-__device__ void 
+__host__ __device__ void 
 intersect_face(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit, int faceIndex);
 
-__device__ void 
+__host__ __device__ void 
 intersect_crude(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit);

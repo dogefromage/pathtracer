@@ -5,7 +5,7 @@
 //     vec3_add(out, ray->o, out);
 // }
 
-static __device__ void
+static __host__ __device__ void
 barycentric_lincom(
     mfloat_t* out,
     const mfloat_t* A, const mfloat_t* B, const mfloat_t* C,
@@ -23,7 +23,8 @@ barycentric_lincom(
 // super fast Möller Trumbore ray-triangle intersection
 // https://cadxfem.org/inf/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
 // https://www.youtube.com/watch?v=fK1RPmF_zjQ
-__device__ int moeller_trumbore_intersect(
+static __host__ __device__ int 
+moeller_trumbore_intersect(
     const mfloat_t* orig, const mfloat_t* dir,
     const mfloat_t* vert0, const mfloat_t* vert1, const mfloat_t* vert2,
     mfloat_t* t, mfloat_t* u, mfloat_t* v) {
@@ -94,7 +95,7 @@ __device__ int moeller_trumbore_intersect(
     return 1;
 }
 
-__device__ void 
+__host__ __device__ void 
 intersect_face(const __restrict__ obj_scene_data* scene,
                                const Ray* ray, Intersection* hit, int faceIndex) {
     obj_face* face = &scene->face_list[faceIndex];
@@ -142,7 +143,7 @@ intersect_face(const __restrict__ obj_scene_data* scene,
     }
 }
 
-__device__ void 
+__host__ __device__ void 
 intersect_crude(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit) {
     for (size_t i = 0; i < scene->face_count; i++) {
         intersect_face(scene, ray, hit, i);

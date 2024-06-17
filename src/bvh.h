@@ -4,27 +4,38 @@
 #include "scene.h"
 
 typedef struct {
-    mfloat_t min[VEC3_SIZE], max[VEC3_SIZE];
-} AABB;
+    mfloat_t min[3], max[3];
+} aabb_t;
 
 typedef struct {
-    AABB bounds;
+    aabb_t bounds;
     uint32_t leftChild, rightChild;
     uint32_t start, end;
-} BVHNode;
+} bvh_node_t;
 
 typedef struct {
-    BVHNode* nodes;
+    bvh_node_t* nodes;
     uint32_t* indices;
-    uint32_t nodeCount, primitiveCount, maxNodeCount;
+    uint32_t nodeCount, maxNodeCount,  primitiveCount;
     struct vec3* centroids;
-} BVH;
+} bvh_t;
 
-__host__ void bvh_build(BVH* bvh, const obj_scene_data* scene);
-__host__ void bvh_free_host(BVH* h_bvh);
-__host__ int bvh_copy_device(BVH** d_bvh, const BVH* h_bvh);
-__host__ int bvh_free_device(BVH* d_bvh);
+typedef struct {
+    uint32_t totalSkippedFaces, numberLeaves;
+    float averageLeafSize;
+} bvh_stats_t;
 
-__device__ void
-bvh_intersect(const __restrict__ BVH* bvh, uint32_t nodeIndex,
+#define BVH_ROOT_NODE 0
+
+__host__ void bvh_build(bvh_t* bvh, const obj_scene_data* scene);
+__host__ void bvh_free_host(bvh_t* h_bvh);
+__host__ int bvh_copy_device(bvh_t** d_bvh, const bvh_t* h_bvh);
+__host__ int bvh_free_device(bvh_t* d_bvh);
+
+__host__ __device__ void
+bvh_intersect(const __restrict__ bvh_t* bvh, uint32_t nodeIndex,
               const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit);
+
+__host__ __device__ void
+bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
+                        const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit);
