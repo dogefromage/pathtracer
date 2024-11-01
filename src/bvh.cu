@@ -486,8 +486,7 @@ bvh_intersect(const __restrict__ bvh_t* bvh, uint32_t nodeIndex,
 }
 
 // stack size must be below bvh tree height + 1,
-// 100 should probably be enough for all eternity
-#define TRAVERSAL_STACK_SIZE 100
+#define TRAVERSAL_STACK_SIZE 512
 
 __host__ __device__ void
 bvh_intersect_iterative(const __restrict__ bvh_t* bvh,

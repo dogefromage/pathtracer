@@ -13,6 +13,7 @@ Started out as a small project over the break and has spiraled out of control ov
 ## TODO:
 * materials (already in .mtl file but not used)
 * importance sampling
+* improve performance of BVH building
 
 ## Used sources and useful stuff
 

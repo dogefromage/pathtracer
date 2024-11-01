@@ -133,8 +133,8 @@ int main(int argc, char* argv[]) {
     render_settings_t settings;
     // settings.width = 300;
     // settings.height = 300;
-    settings.width = 1800;
-    settings.height = 1800;
+    settings.width = 1600;
+    settings.height = 1600;
     settings.samples = 300;
     settings.samples_per_round = 20;
     settings.seed = 69;
