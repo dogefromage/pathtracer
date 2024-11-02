@@ -3,68 +3,66 @@
 #include "assert.h"
 #include "bvh.h"
 #include "utils.h"
+#include <iostream>
 
-static void
-calculate_face_centroid(const obj_scene_data* scene, obj_face* face, mfloat_t* centroid) {
-    mfloat_t totalArea = 0;
-    vec3_zero(centroid);
-    for (uint32_t i = 2; i < face->vertex_count; i++) {
-        mfloat_t* A = scene->vertex_list[face->vertices[0].position].v;
-        mfloat_t* B = scene->vertex_list[face->vertices[i - 1].position].v;
-        mfloat_t* C = scene->vertex_list[face->vertices[i].position].v;
-        mfloat_t edge1[3], edge2[3], cross[3], triCentroid[3];
+static Vec3
+calculate_face_centroid(const obj_scene_data& scene, obj_face& face) {
+    float totalArea = 0;
+    Vec3 centroid = { 0, 0, 0 };
 
-        vec3_subtract(edge1, B, A);
-        vec3_subtract(edge2, C, A);
-        vec3_cross(cross, edge1, edge2);
-        mfloat_t triArea = 0.5 * vec3_length(cross);
-
-        // calculate centroid on triangle
-        vec3_add(triCentroid, A, B);
-        vec3_add(triCentroid, triCentroid, C);
-        vec3_multiply_f(triCentroid, triCentroid, 0.33333333);
+    for (uint32_t i = 2; i < face.vertex_count; i++) {
+        const Vec3& A = scene.vertex_list[face.vertices[0].position];
+        const Vec3& B = scene.vertex_list[face.vertices[i - 1].position];
+        const Vec3& C = scene.vertex_list[face.vertices[i].position];
+        
+        Vec3 edge1 = B.cross(A);
+        Vec3 edge2 = C.cross(A);
+        Vec3 cross = edge1.cross(edge2);
+        float triArea = 0.5 * cross.magnitude();
+        
+        Vec3 triCentroid = (1 / 3.0f) * (A + B + C);
 
         // weighted sum of centroids
-        vec3_multiply_f(triCentroid, triCentroid, triArea);
-        vec3_add(centroid, centroid, triCentroid);
+        centroid += triCentroid * triArea;
         totalArea += triArea;
     }
+
     assert(totalArea);
-    vec3_multiply_f(centroid, centroid, 1.0 / totalArea);
+    centroid /= totalArea;
 
     // for (int i = 0; i < face->vertex_count; i++) {
     //     mfloat_t* A = scene->vertex_list[face->vertices[i].position].v;
     //     printf("(%.3f, %.3f, %.3f), ", A[0], A[1], A[2]);
     // }
     // printf("centroid = (%.4f, %.4f, %.4f)\n", centroid[0], centroid[1], centroid[2]);
+
+    return centroid;
 }
 
-static void aabb_init(aabb_t* aabb) {
-    vec3_const(aabb->min, 1e30);
-    vec3_const(aabb->max, -1e30);
+static void aabb_init(aabb_t& aabb) {
+    aabb.min.set(1e30);
+    aabb.max.set(-1e30);
 }
 
-static mfloat_t aabb_area(aabb_t* aabb) {
-    mfloat_t e[3];
-    vec3_subtract(e, aabb->max, aabb->min);
-    // assert(e[0] >= 0 && e[1] >= 0 && e[2] >= 0);
-    return e[0] * e[1] + e[1] * e[2] + e[2] * e[0];
+static float aabb_area(const aabb_t& aabb) {
+    Vec3 e = aabb.max - aabb.min;
+    return e.x * e.y + e.y * e.z + e.z * e.x;
 }
 
-static void aabb_grow_face(const obj_scene_data* scene, aabb_t* aabb, uint32_t faceIndex) {
-    obj_face* face = &scene->face_list[faceIndex];
-    for (uint32_t j = 0; j < face->vertex_count; j++) {
-        mfloat_t* v = scene->vertex_list[face->vertices[j].position].v;
-        vec3_min(aabb->min, aabb->min, v);
-        vec3_max(aabb->max, aabb->max, v);
+static void aabb_grow_face(const obj_scene_data& scene, aabb_t& aabb, uint32_t faceIndex) {
+    const obj_face &face = scene.face_list[faceIndex];
+    for (uint32_t j = 0; j < face.vertex_count; j++) {
+        const Vec3& v = scene.vertex_list[face.vertices[j].position];
+        aabb.min = Vec3::min(aabb.min, v);
+        aabb.max = Vec3::max(aabb.max, v);
     }
 }
 
-static void update_node_bounds(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex) {
-    bvh_node_t* node = &bvh->nodes[nodeIndex];
-    aabb_init(&node->bounds);
-    for (uint32_t i = node->start; i < node->end; i++) {
-        aabb_grow_face(scene, &node->bounds, bvh->indices[i]);
+static void update_node_bounds(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex) {
+    bvh_node_t& node = bvh.nodes[nodeIndex];
+    aabb_init(node.bounds);
+    for (uint32_t i = node.start; i < node.end; i++) {
+        aabb_grow_face(scene, node.bounds, bvh.indices[i]);
     }
 }
 
@@ -118,34 +116,33 @@ void swap(uint32_t* a, uint32_t* b) {
 //     }
 // }
 
-bvh_t* comparison_bvh;
-int comparison_axis = 0;
+// bvh_t* comparison_bvh;
+// int comparison_axis = 0;
 
-int bvh_comparator(const void* a, const void* b) {
-    assert(comparison_bvh);
-    mfloat_t a_val = comparison_bvh->centroids[*(uint32_t*)a].v[comparison_axis];
-    mfloat_t b_val = comparison_bvh->centroids[*(uint32_t*)b].v[comparison_axis];
-    if (a_val == b_val) return 0;
-    if (a_val < b_val)
-        return -1;
-    else
-        return 1;
-}
+// int bvh_comparator(const void* a, const void* b) {
+//     assert(comparison_bvh);
+//     float a_val = comparison_bvh->centroids[*(uint32_t*)a][comparison_axis];
+//     float b_val = comparison_bvh->centroids[*(uint32_t*)b][comparison_axis];
+//     if (a_val == b_val) return 0;
+//     if (a_val < b_val)
+//         return -1;
+//     else
+//         return 1;
+// }
 
-uint32_t split_by_median(bvh_t* bvh, bvh_node_t* node, int count, bvh_stats_t* stats) {
-    mfloat_t extent[3];
-    vec3_subtract(extent, node->bounds.max, node->bounds.min);
-    assert(extent[0] > 0 && extent[1] > 0 && extent[2] > 0);
+// uint32_t split_by_median(bvh_t& bvh, bvh_node_t& node, int count, bvh_stats_t& stats) {
+//     Vec3 extent = node.bounds.max - node.bounds.min;
+//     assert(extent.x > 0 && extent.y > 0 && extent.z > 0);
 
-    int axis = 0;
-    if (extent[1] > extent[axis]) axis = 1;
-    if (extent[2] > extent[axis]) axis = 2;
+//     int axis = 0;
+//     if (extent.y > extent[axis]) axis = 1;
+//     if (extent.z > extent[axis]) axis = 2;
 
-    comparison_axis = axis;
-    comparison_bvh = bvh;
-    qsort(&bvh->indices[node->start], count, sizeof(uint32_t), bvh_comparator);
-    return node->start + count / 2;
-}
+//     comparison_axis = axis;
+//     comparison_bvh = &bvh;
+//     qsort(&bvh.indices[node.start], count, sizeof(uint32_t), bvh_comparator);
+//     return node.start + count / 2;
+// }
 
 // uint32_t split_by_average(bvh_t* bvh, bvh_node_t* node, int count, bvh_stats_t* stats) {
 //     mfloat_t extent[3];
@@ -181,37 +178,37 @@ uint32_t split_by_median(bvh_t* bvh, bvh_node_t* node, int count, bvh_stats_t* s
 //     return i;
 // }
 
-static mfloat_t
-evaluate_sah(const obj_scene_data* scene,
-             bvh_t* bvh, bvh_node_t* node, int axis, mfloat_t splitPos) {
+static float
+evaluate_sah(const obj_scene_data& scene,
+             bvh_t& bvh, bvh_node_t& node, int axis, float splitPos) {
     // determine triangle counts and bounds for this split candidate
     aabb_t leftBox, rightBox;
-    aabb_init(&leftBox);
-    aabb_init(&rightBox);
+    aabb_init(leftBox);
+    aabb_init(rightBox);
     uint32_t leftCount = 0, rightCount = 0;
-    for (uint32_t i = node->start; i < node->end; i++) {
-        mfloat_t centroid = bvh->centroids[bvh->indices[i]].v[axis];
+    for (uint32_t i = node.start; i < node.end; i++) {
+        float centroid = bvh.centroids[bvh.indices[i]][axis];
         if (centroid < splitPos) {
             leftCount++;
-            aabb_grow_face(scene, &leftBox, bvh->indices[i]);
+            aabb_grow_face(scene, leftBox, bvh.indices[i]);
         } else {
             rightCount++;
-            aabb_grow_face(scene, &rightBox, bvh->indices[i]);
+            aabb_grow_face(scene, rightBox, bvh.indices[i]);
         }
     }
 
-    mfloat_t cost = leftCount * aabb_area(&leftBox) + rightCount * aabb_area(&rightBox);
+    float cost = leftCount * aabb_area(leftBox) + rightCount * aabb_area(rightBox);
     return cost > 0 ? cost : 1e30;
 }
 
-static mfloat_t
-find_split_plane_centroids(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
-                           int* bestAxis, mfloat_t* bestSplit) {
-    mfloat_t bestCost = 1e30;
+static float
+find_split_plane_centroids(const obj_scene_data& scene, bvh_t& bvh, bvh_node_t& node,
+                           int* bestAxis, float* bestSplit) {
+    float bestCost = 1e30;
     for (int a = 0; a < 3; a++) {
-        for (uint32_t i = node->start; i < node->end; i++) {
-            mfloat_t candidate = bvh->centroids[bvh->indices[i]].v[a];
-            mfloat_t cost = evaluate_sah(scene, bvh, node, a, candidate);
+        for (uint32_t i = node.start; i < node.end; i++) {
+            float candidate = bvh.centroids[bvh.indices[i]][a];
+            float cost = evaluate_sah(scene, bvh, node, a, candidate);
             if (cost < bestCost) {
                 *bestAxis = a;
                 *bestSplit = candidate;
@@ -223,21 +220,21 @@ find_split_plane_centroids(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* 
     return bestCost;
 }
 
-static mfloat_t
-find_best_split_plane_bands(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
-                      int* bestAxis, mfloat_t* bestSplit, int numBands) {
-    mfloat_t bestCost = 1e30;
+static float
+find_best_split_plane_bands(const obj_scene_data& scene, bvh_t& bvh, bvh_node_t& node,
+                      int* bestAxis, float* bestSplit, int numBands) {
+    float bestCost = 1e30;
     for (int a = 0; a < 3; a++) {
-        mfloat_t boundsMin = node->bounds.min[a];
-        mfloat_t boundsMax = node->bounds.max[a];
+        float boundsMin = node.bounds.min[a];
+        float boundsMax = node.bounds.max[a];
         if (boundsMin == boundsMax) {
             continue;
         }
-        mfloat_t scale = (boundsMax - boundsMin) / numBands;
+        float scale = (boundsMax - boundsMin) / numBands;
         for (int i = 1; i < numBands; i++) {
-            mfloat_t candidate = boundsMin + i * scale;
+            float candidate = boundsMin + i * scale;
             // mfloat_t candidate = bvh->centroids[bvh->indices[i]].v[a];
-            mfloat_t cost = evaluate_sah(scene, bvh, node, a, candidate);
+            float cost = evaluate_sah(scene, bvh, node, a, candidate);
             if (cost < bestCost) {
                 *bestAxis = a;
                 *bestSplit = candidate;
@@ -251,10 +248,10 @@ find_best_split_plane_bands(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t*
 
 #define N_BANDS 100
 
-static mfloat_t
-find_best_split_plane(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
-                      int* bestAxis, mfloat_t* bestSplit) {
-    int count = node->end - node->start;
+static float
+find_best_split_plane(const obj_scene_data& scene, bvh_t& bvh, bvh_node_t& node,
+                      int* bestAxis, float* bestSplit) {
+    int count = node.end - node.start;
     if (count < N_BANDS) {
         return find_split_plane_centroids(scene, bvh, node, bestAxis, bestSplit);
     } else {
@@ -263,9 +260,12 @@ find_best_split_plane(const obj_scene_data* scene, bvh_t* bvh, bvh_node_t* node,
 }
 
 static void
-subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats_t* stats) {
-    bvh_node_t* node = &bvh->nodes[nodeIndex];
-    int count = node->end - node->start;
+subdivide(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats, int depth) {
+
+    stats.maxDepth = std::max(stats.maxDepth, depth);
+
+    bvh_node_t& node = bvh.nodes[nodeIndex];
+    int count = node.end - node.start;
     if (count <= 2) {
         return;  // stop criterion
     }
@@ -273,128 +273,134 @@ subdivide(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats
     // uint32_t i = split_by_median(bvh, node, count, stats);
 
     int bestAxis = -1;
-    mfloat_t bestPos = 0;
-    mfloat_t bestCost = find_best_split_plane(scene, bvh, node, &bestAxis, &bestPos);
+    float bestPos = 0;
+    float bestCost = find_best_split_plane(scene, bvh, node, &bestAxis, &bestPos);
 
     // partitioning
-    int i = node->start;
-    int j = node->end - 1;
+    int i = node.start;
+    int j = node.end - 1;
     while (i < j) {
-        if (bvh->centroids[bvh->indices[i]].v[bestAxis] < bestPos) {
+        if (bvh.centroids[bvh.indices[i]][bestAxis] < bestPos) {
             i++;
         } else {
-            swap(&bvh->indices[i], &bvh->indices[j--]);
+            swap(&bvh.indices[i], &bvh.indices[j--]);
         }
     }
 
-    int leftCount = i - node->start;
+    int leftCount = i - node.start;
     if (leftCount == 0 || leftCount == count) {
         // printf("Skipped split\n");
-        stats->totalSkippedFaces += count;
+        stats.totalSkippedFaces += count;
         return;
     }
 
-    uint32_t leftIndex = bvh->nodeCount++;
-    uint32_t rightIndex = bvh->nodeCount++;
-    bvh_node_t* left = &bvh->nodes[leftIndex];
-    bvh_node_t* right = &bvh->nodes[rightIndex];
-    left->start = node->start;
-    left->end = right->start = i;
-    right->end = node->end;
+    uint32_t leftIndex = bvh.nodeCount++;
+    uint32_t rightIndex = bvh.nodeCount++;
+    bvh_node_t& left = bvh.nodes[leftIndex];
+    bvh_node_t& right = bvh.nodes[rightIndex];
+    left.start = node.start;
+    left.end = right.start = i;
+    right.end = node.end;
 
     // printf("Split: %u => %u / %u\n", left->start, left->end - left->start, right->end - right->start);
 
     time_t currTime;
     time(&currTime);
-    double elapsed_seconds = difftime(currTime, stats->lastInfo);
+    double elapsed_seconds = difftime(currTime, stats.lastInfo);
     if (elapsed_seconds > 1.0) {
-        printf("created %u bvh nodes (of at most %d)\n", bvh->nodeCount, bvh->maxNodeCount);
-        stats->lastInfo = currTime;
+        printf("created %u bvh nodes (of at most %d)\n", bvh.nodeCount, bvh.maxNodeCount);
+        stats.lastInfo = currTime;
     }
 
-
-    node->leftChild = leftIndex;
-    node->rightChild = rightIndex;
-    node->start = node->end = 0;  // make non-leaf
+    node.leftChild = leftIndex;
+    node.rightChild = rightIndex;
+    node.start = node.end = 0;  // make non-leaf
     update_node_bounds(scene, bvh, leftIndex);
     update_node_bounds(scene, bvh, rightIndex);
-    subdivide(scene, bvh, leftIndex, stats);
-    subdivide(scene, bvh, rightIndex, stats);
+    subdivide(scene, bvh, leftIndex, stats, depth + 1);
+    subdivide(scene, bvh, rightIndex, stats, depth + 1);
 }
 
 static void
-calculate_stats(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats_t* stats) {
-    stats->numberLeaves = 0;
-    stats->averageLeafSize = 0;
-    for (uint32_t i = 0; i < bvh->nodeCount; i++) {
-        bvh_node_t* node = &bvh->nodes[i];
-        uint32_t faces = node->end - node->start;
+calculate_stats(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats) {
+    stats.numberLeaves = 0;
+    stats.averageLeafSize = 0;
+    for (uint32_t i = 0; i < bvh.nodeCount; i++) {
+        bvh_node_t& node = bvh.nodes[i];
+        uint32_t faces = node.end - node.start;
         if (faces > 0) {
-            stats->numberLeaves++;
-            stats->averageLeafSize += faces;
+            stats.numberLeaves++;
+            stats.averageLeafSize += faces;
         }
     }
-    stats->averageLeafSize /= stats->numberLeaves;
+    stats.averageLeafSize /= stats.numberLeaves;
 }
 
 static void
-print_stats(const obj_scene_data* scene, bvh_t* bvh, uint32_t nodeIndex, bvh_stats_t* stats) {
+print_stats(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats) {
     printf("bvh_t stats:\n");
-    printf("  node count = %u\n", bvh->nodeCount);
-    printf("  optimal node count = %u\n", bvh->maxNodeCount);
-    printf("  number leafs = %u\n", stats->numberLeaves);
+    printf("  node count = %u\n", bvh.nodeCount);
+    printf("  optimal node count = %u\n", bvh.maxNodeCount);
+    printf("  number leafs = %u\n", stats.numberLeaves);
     printf("  skipped faces = %u / %u = %.3f\n",
-           stats->totalSkippedFaces, bvh->primitiveCount,
-           stats->totalSkippedFaces / (double)bvh->primitiveCount);
-    printf("  average leaf size = %.2f\n", stats->averageLeafSize);
+           stats.totalSkippedFaces, bvh.primitiveCount,
+           stats.totalSkippedFaces / (float)bvh.primitiveCount);
+    printf("  average leaf size = %.2f\n", stats.averageLeafSize);
+    printf("  max tree height =  %d\n", stats.maxDepth);
 }
 
-__host__ void
-bvh_build(bvh_t* bvh, const obj_scene_data* scene) {
+void
+bvh_build(bvh_t& bvh, const obj_scene_data& scene) {
     printf("Building bvh_t... \n");
 
     bvh_stats_t stats;
     memset(&stats, 0, sizeof(bvh_stats_t));
     time(&stats.lastInfo);
 
-    bvh->primitiveCount = scene->face_count;
-    bvh->maxNodeCount = 2 * bvh->primitiveCount - 1;
+    bvh.primitiveCount = scene.face_count;
+    bvh.maxNodeCount = 2 * bvh.primitiveCount - 1;
 
-    // bvh->nodeCount = 0;
-    bvh->nodes = (bvh_node_t*)malloc(sizeof(bvh_node_t) * bvh->maxNodeCount);
+    // bvh.nodeCount = 0;
+    bvh.nodes = (bvh_node_t*)malloc(sizeof(bvh_node_t) * bvh.maxNodeCount);
 
     // mutable primitive list for sorting faces
-    bvh->indices = (uint32_t*)malloc(sizeof(uint32_t) * bvh->primitiveCount);
-    for (uint32_t i = 0; i < bvh->primitiveCount; i++) {
-        bvh->indices[i] = i;
+    bvh.indices = (uint32_t*)malloc(sizeof(uint32_t) * bvh.primitiveCount);
+    for (uint32_t i = 0; i < bvh.primitiveCount; i++) {
+        bvh.indices[i] = i;
     }
     // calculate centroids, accesses work with scene face indices
-    bvh->centroids = (struct vec3*)malloc(sizeof(struct vec3) * bvh->primitiveCount);
-    for (uint32_t i = 0; i < bvh->primitiveCount; i++) {
-        calculate_face_centroid(scene, &scene->face_list[i], bvh->centroids[i].v);
+    bvh.centroids = (Vec3*)malloc(sizeof(Vec3) * bvh.primitiveCount);
+    for (uint32_t i = 0; i < bvh.primitiveCount; i++) {
+        bvh.centroids[i] = calculate_face_centroid(scene, scene.face_list[i]);
     }
 
-    uint32_t rootIndex = /* BVH_ROOT_NODE ;*/ bvh->nodeCount++;
-    bvh_node_t* root = &bvh->nodes[rootIndex];
-    root->start = 0;
-    root->end = bvh->primitiveCount;
+    uint32_t rootIndex = /* BVH_ROOT_NODE ;*/ bvh.nodeCount++;
+    bvh_node_t& root = bvh.nodes[rootIndex];
+    root.start = 0;
+    root.end = bvh.primitiveCount;
     update_node_bounds(scene, bvh, rootIndex);
-    subdivide(scene, bvh, rootIndex, &stats);
+    subdivide(scene, bvh, rootIndex, stats, 1);
 
-    calculate_stats(scene, bvh, rootIndex, &stats);
-    print_stats(scene, bvh, rootIndex, &stats);
+    calculate_stats(scene, bvh, rootIndex, stats);
+    print_stats(scene, bvh, rootIndex, stats);
 
     // not needed anymore
-    free(bvh->centroids);
-    bvh->centroids = NULL;
+    free(bvh.centroids);
+    bvh.centroids = NULL;
+
+    if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
+        printf("ERROR bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n", 
+            stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
+        exit(EXIT_FAILURE);
+    }
 }
 
 __host__ void
-bvh_free_host(bvh_t* h_bvh) {
-    free(h_bvh->nodes);
-    h_bvh->nodes = NULL;
-    free(h_bvh->indices);
-    h_bvh->indices = NULL;
+bvh_free_host(bvh_t& h_bvh) {
+    free(h_bvh.nodes);
+    h_bvh.nodes = NULL;
+    free(h_bvh.indices);
+    h_bvh.indices = NULL;
 }
 
 __host__ int
@@ -450,68 +456,119 @@ bvh_free_device(bvh_t* d_bvh) {
     return 0;
 }
 
-static __host__ __device__ int
-intersect_aabb(const aabb_t* aabb, const Ray* ray, mfloat_t min_t) {
-    mfloat_t t1[VEC3_SIZE], t2[VEC3_SIZE], tminv[VEC3_SIZE], tmaxv[VEC3_SIZE];
-    vec3_subtract(t1, aabb->min, ray->o);
-    vec3_divide(t1, t1, ray->r);
-    vec3_subtract(t2, aabb->max, ray->o);
-    vec3_divide(t2, t2, ray->r);
+#define RAY_NO_HIT 1e30f
 
-    vec3_min(tminv, t1, t2);
-    vec3_max(tmaxv, t1, t2);
+static PLATFORM float
+intersect_aabb(const aabb_t& aabb, const Ray& ray, float min_t) {
+    Vec3 t1 = (aabb.min - ray.o) / ray.r;
+    Vec3 t2 = (aabb.max - ray.o) / ray.r;
+    Vec3 tminv = Vec3::min(t1, t2);
+    Vec3 tmaxv = Vec3::max(t1, t2);
 
-    mfloat_t tmin = MFMAX(tminv[0], MFMAX(tminv[1], tminv[2]));
-    mfloat_t tmax = MFMIN(tmaxv[0], MFMIN(tmaxv[1], tmaxv[2]));
+    float tmin = tminv.maxComponent();
+    float tmax = tmaxv.minComponent();
 
-    return tmax >= tmin && tmin < min_t && tmax > 0;
+    if (tmax >= tmin && tmin < min_t && tmax > 0) {
+        return tmin;
+    } else {
+        return RAY_NO_HIT;
+    }
 }
 
-__host__ __device__ void
+PLATFORM void
 bvh_intersect(const __restrict__ bvh_t* bvh, uint32_t nodeIndex,
-              const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit) {
-    bvh_node_t* node = &bvh->nodes[nodeIndex];
-    if (!intersect_aabb(&node->bounds, ray, hit->distance)) {
+              const __restrict__ obj_scene_data* scene, const Ray& ray, intersection_t& hit) {
+    bvh_node_t &node = bvh->nodes[nodeIndex];
+    if (!intersect_aabb(node.bounds, ray, hit.distance)) {
         return;
     }
-    if (node->end - node->start > 0) {
+    if (node.end - node.start > 0) {
         // is leaf
-        for (uint32_t i = node->start; i < node->end; i++) {
+        for (uint32_t i = node.start; i < node.end; i++) {
             intersect_face(scene, ray, hit, bvh->indices[i]);
         }
     } else {
-        bvh_intersect(bvh, node->leftChild, scene, ray, hit);
-        bvh_intersect(bvh, node->rightChild, scene, ray, hit);
+        bvh_intersect(bvh, node.leftChild, scene, ray, hit);
+        bvh_intersect(bvh, node.rightChild, scene, ray, hit);
     }
 }
 
-// stack size must be below bvh tree height + 1,
-#define TRAVERSAL_STACK_SIZE 512
+// stack size must be set below bvh tree height + 1,
 
-__host__ __device__ void
+PLATFORM void
 bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
-                        const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit) {
+                        const __restrict__ obj_scene_data* scene, const Ray& ray, intersection_t& hit) {
 
-    int stack[TRAVERSAL_STACK_SIZE];
+    bvh_node_t* stack[BVH_TRAVERSAL_STACK_SIZE];
     int depth = 0;
-    stack[0] = BVH_ROOT_NODE;
+    stack[0] = &bvh->nodes[BVH_ROOT_NODE];
 
     while (depth >= 0) {
-        int u = stack[depth];
-        bvh_node_t* node = &bvh->nodes[u];
-        depth--;
+        bvh_node_t* node = stack[depth--];
 
-        if (intersect_aabb(&node->bounds, ray, hit->distance)) {
+        while (node != NULL) {
+
             if (node->end - node->start > 0) {
+                // is leaf
                 for (uint32_t i = node->start; i < node->end; i++) {
                     intersect_face(scene, ray, hit, bvh->indices[i]);
                 }
-                // is leaf
+                node = NULL;
             } else {
-                // no leaf, recurse
-                stack[++depth] = node->rightChild;
-                stack[++depth] = node->leftChild;
+
+                bvh_node_t* child1 = &bvh->nodes[node->leftChild];
+                bvh_node_t* child2 = &bvh->nodes[node->rightChild];
+
+                float t1 = intersect_aabb(child1->bounds, ray, hit.distance);
+                float t2 = intersect_aabb(child2->bounds, ray, hit.distance);
+
+                if (t2 < t1) {
+                    bvh_node_t* tempc = child1;
+                    child1 = child2;
+                    child2 = tempc;
+                    float tempt = t1;
+                    t1 = t2;
+                    t2 = tempt;
+                }
+
+                if (t1 == RAY_NO_HIT) {
+                    node = NULL;
+                } else {
+                    node = child1;
+                    if (t2 != RAY_NO_HIT) {
+                        stack[++depth] = child2;
+                    }
+                }
             }
         }
     }
 }
+
+// PLATFORM void
+// bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
+//                         const __restrict__ obj_scene_data* scene, const Ray& ray, intersection_t& hit) {
+
+//     uint32_t stack[BVH_TRAVERSAL_STACK_SIZE];
+//     int depth = 0;
+//     stack[0] = BVH_ROOT_NODE;
+
+//     while (depth >= 0) {
+//         int u = stack[depth];
+//         bvh_node_t* node = &bvh->nodes[u];
+//         depth--;
+
+//         if (intersect_aabb(node->bounds, ray, hit.distance)) {
+//             if (node->end - node->start > 0) {
+//                 for (uint32_t i = node->start; i < node->end; i++) {
+//                     intersect_face(scene, ray, hit, bvh->indices[i]);
+//                 }
+//                 // is leaf
+//             } else {
+//                 // no leaf, recurse
+//                 stack[++depth] = node->rightChild;
+//                 stack[++depth] = node->leftChild;
+//             }
+//         }
+//     }
+// }
+

@@ -1,22 +1,28 @@
 #pragma once
-#include "mathc.h"
+#include "mathops.h"
+#include "config.h"
 #include "scene.h"
 
 #define CLEAR_DISTANCE 1e30
 
 typedef struct {
-    mfloat_t o[VEC3_SIZE], r[VEC3_SIZE];
+    Vec3 o, r;
 } Ray;
+
+inline std::ostream& operator<<(std::ostream& os, const Ray& ray) {
+    os << "[ " << ray.o << ", " << ray.r << " ]";
+    return os;
+}
 
 typedef struct {
     int has_hit;
-    mfloat_t distance;
-    mfloat_t position[VEC3_SIZE], normal[VEC3_SIZE], texture_coord[VEC3_SIZE];
+    float distance;
+    Vec3 position, normal, texture_coord;
     obj_material* mat;
-} Intersection;
+} intersection_t;
 
-__host__ __device__ void 
-intersect_face(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit, int faceIndex);
+PLATFORM void 
+intersect_face(const __restrict__ obj_scene_data* scene, const Ray& ray, intersection_t& hit, int faceIndex);
 
-__host__ __device__ void 
-intersect_crude(const __restrict__ obj_scene_data* scene, const Ray* ray, Intersection* hit);
+PLATFORM void 
+intersect_crude(const __restrict__ obj_scene_data* scene, const Ray& ray, intersection_t& hit);

@@ -5,14 +5,13 @@
 #include "assert.h"
 #include "bvh.h"
 #include "image.h"
-#include "mathc.h"
 #include "renderer.h"
 #include "scene.h"
 #include "utils.h"
 
 #ifdef USE_CPU_RENDER
 
-int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_img,
+int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
                       size_t img_size, render_settings_t settings) {
     time_t start, end;
 
@@ -22,9 +21,9 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_img,
 
     time(&start);
 
-    for (int s = 0; s < settings.samples;) {
-        for (int y = 0; y < settings.height; y++) {
-            for (int x = 0; x < settings.width; x++) {
+    for (size_t s = 0; s < settings.samples;) {
+        for (size_t y = 0; y < settings.height; y++) {
+            for (size_t x = 0; x < settings.width; x++) {
                 render_host(h_img, h_bvh, h_scene, x, y, settings, s);
             }
         }
@@ -40,8 +39,10 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_img,
         s += settings.samples_per_round;
         settings.seed++;
 
-        printf("Rendered %d / %ld samples in %.0fs (%.2f samples/s)\n",
-               s, settings.samples, elapsed_seconds, s / elapsed_seconds);
+        float ksns = settings.width * settings.height * s / (1000 * elapsed_seconds);
+
+        printf("Rendered %ld / %ld samples in %.0fs - %.2f samples/s - %.2f kSN/s\n",
+               s, settings.samples, elapsed_seconds, s / elapsed_seconds, ksns);
     }
 
     return 0;
@@ -49,7 +50,7 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_img,
 
 #else
 
-int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_img,
+int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
                         size_t img_size, render_settings_t settings) {
     obj_scene_data* d_scene;
     if (scene_copy_to_device(&d_scene, h_scene)) {
@@ -64,7 +65,7 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_im
     time_t start, end;
     cudaError_t err;
 
-    struct vec3* d_img;
+    Vec3* d_img;
     err = cudaMalloc(&d_img, img_size);
     if (check_cuda_err(err)) return 1;
 
@@ -83,7 +84,7 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_im
 
     time(&start);
 
-    for (int s = 0; s < settings.samples;) {
+    for (size_t s = 0; s < settings.samples;) {
         render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene,
                                                            settings, s);
         err = cudaDeviceSynchronize();
@@ -102,8 +103,10 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, struct vec3* h_im
         s += settings.samples_per_round;
         settings.seed++;
 
-        printf("Rendered %d / %ld samples in %.0fs (%.2f samples/s)\n",
-               s, settings.samples, elapsed_seconds, s / elapsed_seconds);
+        float megaPixelSamplesS = settings.width * settings.height * s / (1000000 * elapsed_seconds);
+
+        printf("Rendered %ld / %ld samples in %.0fs - %.2f samples/s - %.2f MPS/s\n",
+               s, settings.samples, elapsed_seconds, s / elapsed_seconds, megaPixelSamplesS);
         fflush(stdout);
     }
 
@@ -136,7 +139,7 @@ int main(int argc, char* argv[]) {
     settings.width = 1600;
     settings.height = 1600;
     settings.samples = 300;
-    settings.samples_per_round = 20;
+    settings.samples_per_round = 30;
     settings.seed = 69;
     // camera
     // settings.focal_length = 1.5;
@@ -144,11 +147,11 @@ int main(int argc, char* argv[]) {
     settings.sensor_height = 0.2;
 
     bvh_t h_bvh;
-    bvh_build(&h_bvh, &h_scene);
+    bvh_build(h_bvh, h_scene);
 
-    size_t img_size = sizeof(struct vec3) * settings.width * settings.height;
+    size_t img_size = sizeof(Vec3) * settings.width * settings.height;
 
-    struct vec3* h_img = (struct vec3*)malloc(img_size);
+    Vec3* h_img = (Vec3*)malloc(img_size);
     assert(h_img);
 
 #ifdef USE_CPU_RENDER
@@ -164,7 +167,7 @@ int main(int argc, char* argv[]) {
     free(h_img);
     h_img = NULL;
     delete_obj_data(&h_scene);
-    bvh_free_host(&h_bvh);
+    bvh_free_host(h_bvh);
 
     return 0;
 }

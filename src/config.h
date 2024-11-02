@@ -1,6 +1,9 @@
 #pragma once
 
+// #define USE_INTERSECT_CRUDE
 // #define USE_CPU_RENDER
+
+#define BVH_TRAVERSAL_STACK_SIZE 64
 
 #ifdef USE_CPU_RENDER
 #define PLATFORM __host__

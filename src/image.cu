@@ -1,25 +1,27 @@
-#include "image.h"
-
 #include <stdio.h>
 
-uint8_t clamp_channel(mfloat_t c) {
+#include "image.h"
+#include <cstdint>
+
+uint8_t clamp_channel(float c) {
     if (c < 0.0) c = 0.0;
     if (c > 1.0) c = 1.0;
     return (uint8_t)(255 * c);
 }
 
-void linear_to_gamma(mfloat_t* c) {
-    c[0] = MSQRT(c[0]);
-    c[1] = MSQRT(c[1]);
-    c[2] = MSQRT(c[2]);
+Vec3 linear_to_gamma(Vec3 c) {
+    return Vec3(
+        sqrtf(c.x),
+        sqrtf(c.y),
+        sqrtf(c.z)
+    );
 }
 
-void color_correct(mfloat_t* c) {
-    linear_to_gamma(c);
-    vec3_multiply_f(c, c, 1);
+Vec3 color_correct(Vec3 c) {
+    return linear_to_gamma(c);
 }
 
-void write_bmp(struct vec3* pixels, int width, int height, const char* filename) {
+void write_bmp(Vec3* pixels, int width, int height, const char* filename) {
     unsigned int header[14];
     int i, j;
     FILE* fp = fopen(filename, "wb");
@@ -43,12 +45,11 @@ void write_bmp(struct vec3* pixels, int width, int height, const char* filename)
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
             int pixel = i * width + j;
-            mfloat_t color[VEC3_SIZE];
-            vec3_assign(color, pixels[pixel].v);
-            color_correct(color);
-            uint8_t R = clamp_channel(color[0]);
-            uint8_t G = clamp_channel(color[1]);
-            uint8_t B = clamp_channel(color[2]);
+            Vec3 c = pixels[pixel];
+            Vec3 c_corr = color_correct(c);
+            uint8_t R = clamp_channel(c_corr.x);
+            uint8_t G = clamp_channel(c_corr.y);
+            uint8_t B = clamp_channel(c_corr.z);
             fwrite(&B, 1, 1, fp);
             fwrite(&G, 1, 1, fp);
             fwrite(&R, 1, 1, fp);

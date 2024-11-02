@@ -20,10 +20,10 @@ static size_t linenumber = 0;
 #define PARSE_ERR(s) (fprintf(stderr, "[%s:%lu] %s", filename, linenumber, s))
 
 void obj_set_material_defaults(obj_material *mtl) {
-    vec3_const(mtl->amb, 0.0);
-    vec3_const(mtl->diff, 0.8);
-    vec3_const(mtl->spec, 1.0);
-    vec3_const(mtl->emit, 0.0);
+    mtl->amb.set(0.0);
+    mtl->diff.set(0.8);
+    mtl->spec.set(1.0);
+    mtl->emit.set(0.0);
 
     mtl->spec_exp = 0;
     mtl->dissolved = 1;
@@ -85,8 +85,8 @@ obj_face *obj_parse_face(obj_growable_scene_data *scene) {
     return face;
 }
 
-struct vec3 *obj_parse_vector() {
-    struct vec3 *vec = (struct vec3 *)calloc(1, sizeof(struct vec3));
+Vec3 *obj_parse_vector() {
+    Vec3 *vec = (Vec3 *)calloc(1, sizeof(Vec3));
 
     char *tok_ref = NULL;
     char *line = strtok(NULL, "\n");
@@ -96,7 +96,7 @@ struct vec3 *obj_parse_vector() {
         if (token == NULL) {
             break;
         }
-        vec->v[i] = atof(token);
+        (*vec)[i] = atof(token);
         token = strtok_r(NULL, WHITESPACE, &tok_ref);
         // printf("e[%u] = %f\n", i, v->e[i]);
     }
@@ -171,28 +171,28 @@ int obj_parse_mtl_file(obj_growable_scene_data *scene) {
         }
         // ambient
         else if (!strcmp(current_token, "Ka") && current_mtl != NULL) {
-            current_mtl->amb[0] = atof(strtok(NULL, " \t"));
-            current_mtl->amb[1] = atof(strtok(NULL, " \t"));
-            current_mtl->amb[2] = atof(strtok(NULL, " \t"));
+            current_mtl->amb.x = atof(strtok(NULL, " \t"));
+            current_mtl->amb.y = atof(strtok(NULL, " \t"));
+            current_mtl->amb.z = atof(strtok(NULL, " \t"));
         }
         // diff
         else if (!strcmp(current_token, "Kd") && current_mtl != NULL) {
-            current_mtl->diff[0] = atof(strtok(NULL, " \t"));
-            current_mtl->diff[1] = atof(strtok(NULL, " \t"));
-            current_mtl->diff[2] = atof(strtok(NULL, " \t"));
-            // printf("diff[%f,%f,%f]\n", current_mtl->diff[0], current_mtl->diff[1], current_mtl->diff[2]);
+            current_mtl->diff.x = atof(strtok(NULL, " \t"));
+            current_mtl->diff.y = atof(strtok(NULL, " \t"));
+            current_mtl->diff.z = atof(strtok(NULL, " \t"));
+            // printf("diff[%f,%f,%f]\n", current_mtl->diff.x, current_mtl->diff.y, current_mtl->diff.z);
         }
         // specular
         else if (!strcmp(current_token, "Ke") && current_mtl != NULL) {
-            current_mtl->emit[0] = atof(strtok(NULL, " \t"));
-            current_mtl->emit[1] = atof(strtok(NULL, " \t"));
-            current_mtl->emit[2] = atof(strtok(NULL, " \t"));
+            current_mtl->emit.x = atof(strtok(NULL, " \t"));
+            current_mtl->emit.y = atof(strtok(NULL, " \t"));
+            current_mtl->emit.z = atof(strtok(NULL, " \t"));
         }
         // specular
         else if (!strcmp(current_token, "Ks") && current_mtl != NULL) {
-            current_mtl->spec[0] = atof(strtok(NULL, " \t"));
-            current_mtl->spec[1] = atof(strtok(NULL, " \t"));
-            current_mtl->spec[2] = atof(strtok(NULL, " \t"));
+            current_mtl->spec.x = atof(strtok(NULL, " \t"));
+            current_mtl->spec.y = atof(strtok(NULL, " \t"));
+            current_mtl->spec.z = atof(strtok(NULL, " \t"));
         }
         // shiny
         else if (!strcmp(current_token, "Ns") && current_mtl != NULL) {
@@ -266,9 +266,9 @@ int obj_parse_obj_file(obj_growable_scene_data *growable_data, char *param_filen
     // ADD DEFAULT MATERIAL
     obj_material *missing_material = (obj_material *)malloc(sizeof(obj_material));
     obj_set_material_defaults(missing_material);
-    missing_material->diff[0] = 1.0;  // bright pink
-    missing_material->diff[1] = 0.0;
-    missing_material->diff[2] = 1.0;
+    missing_material->diff.x = 1.0;  // bright pink
+    missing_material->diff.y = 0.0;
+    missing_material->diff.z = 1.0;
     // get the name
     strcpy(missing_material->name, "missing");
     int missing_material_index = List_insert(&growable_data->material_list, missing_material);
@@ -377,15 +377,15 @@ void obj_transfer_and_free(obj_scene_data *data_out, obj_growable_scene_data *gr
     obj_copy_and_align_indirect_data((void **)&data_out->vertex_list,
                                      growable_data->vertex_list.data,
                                      growable_data->vertex_list.item_count,
-                                     sizeof(struct vec3));
+                                     sizeof(Vec3));
     obj_copy_and_align_indirect_data((void **)&data_out->vertex_normal_list,
                                      growable_data->vertex_normal_list.data,
                                      growable_data->vertex_normal_list.item_count,
-                                     sizeof(struct vec3));
+                                     sizeof(Vec3));
     obj_copy_and_align_indirect_data((void **)&data_out->vertex_texture_list,
                                      growable_data->vertex_texture_list.data,
                                      growable_data->vertex_texture_list.item_count,
-                                     sizeof(struct vec3));
+                                     sizeof(Vec3));
     obj_copy_and_align_indirect_data((void **)&data_out->face_list,
                                      growable_data->face_list.data,
                                      growable_data->face_list.item_count,
@@ -422,58 +422,56 @@ void obj_transfer_and_free(obj_scene_data *data_out, obj_growable_scene_data *gr
 int obj_finalize_data(obj_growable_scene_data *data) {
     // normalize normals, wikipedia says they're not necessarily unit length
     for (size_t i = 0; i < data->vertex_normal_list.item_count; i++) {
-        struct vec3 *p = (struct vec3 *)data->vertex_normal_list.data[i];
-        vec3_normalize(p->v, p->v);
+        Vec3 &p = *(Vec3 *)data->vertex_normal_list.data[i];
+        p.normalize();
     }
 
     int zero_vertex_tex_index = List_insert(
         &data->vertex_texture_list,
-        calloc(1, sizeof(struct vec3)));
+        calloc(1, sizeof(Vec3)));
 
     // add missing normals
     for (size_t i = 0; i < data->face_list.item_count; i++) {
-        obj_face *face = (obj_face *)data->face_list.data[i];
+        obj_face &face = *(obj_face *)data->face_list.data[i];
 
         // calculate face normal based on whole face
-        struct vec3 normal = {0, 0, 0};
-        for (size_t j = 0; j < face->vertex_count; j++) {
-            obj_face_vertex *vert = &face->vertices[j];
-            if (vert->position < 0) {
+        Vec3 normal = {0, 0, 0};
+        for (size_t j = 0; j < face.vertex_count; j++) {
+            obj_face_vertex &vert = face.vertices[j];
+            if (vert.position < 0) {
                 fprintf(stderr, "Missing position vertex %lu on face %lu.\n", j, i);
                 return 1;
             }
 
             if (j >= 2) {
                 // calculate normal based on fan triangulation
-                struct vec3 *V0 = (struct vec3 *)data->vertex_list.data[face->vertices[0].position];
-                struct vec3 *Vl = (struct vec3 *)data->vertex_list.data[face->vertices[j - 1].position];
-                struct vec3 *Vn = (struct vec3 *)data->vertex_list.data[face->vertices[j].position];
-                struct vec3 edge1, edge2, temp_n;
-                vec3_subtract(edge1.v, Vn->v, Vl->v);
-                vec3_subtract(edge2.v, V0->v, Vl->v);
-                vec3_cross(temp_n.v, edge1.v, edge2.v);
-                vec3_add(normal.v, normal.v, temp_n.v);
+                Vec3 &V0 = *(Vec3 *)data->vertex_list.data[face.vertices[0].position];
+                Vec3 &Vl = *(Vec3 *)data->vertex_list.data[face.vertices[j - 1].position];
+                Vec3 &Vn = *(Vec3 *)data->vertex_list.data[face.vertices[j].position];
+                Vec3 edge1 = Vn - Vl;
+                Vec3 edge2 = V0 - Vl;
+                normal += edge1.cross(edge2);
             }
         }
 
         // normalize
-        vec3_normalize(normal.v, normal.v);
+        normal.normalize();
 
         // set normals if missing
         int next_normal = -1;
-        for (size_t j = 0; j < face->vertex_count; j++) {
-            obj_face_vertex *vert = &face->vertices[j];
-            if (vert->normal < 0) {
+        for (size_t j = 0; j < face.vertex_count; j++) {
+            obj_face_vertex& vert = face.vertices[j];
+            if (vert.normal < 0) {
                 if (next_normal < 0) {
                     // create new normal
-                    struct vec3 *heap_normal = (struct vec3 *)malloc(sizeof(struct vec3));
-                    vec3_assign(heap_normal->v, normal.v);
+                    Vec3 *heap_normal = (Vec3 *)malloc(sizeof(Vec3));
+                    *heap_normal = normal;
                     next_normal = List_insert(&data->vertex_normal_list, heap_normal);
                 }
-                vert->normal = next_normal;
+                vert.normal = next_normal;
             }
-            if (vert->texture < 0) {
-                vert->texture = zero_vertex_tex_index;  // default value
+            if (vert.texture < 0) {
+                vert.texture = zero_vertex_tex_index;  // default value
             }
         }
     }
@@ -488,15 +486,15 @@ int obj_finalize_data(obj_growable_scene_data *data) {
 
 void obj_growable_fprint(FILE *stream, obj_growable_scene_data *data) {
     for (size_t i = 0; i < data->vertex_list.item_count; i++) {
-        struct vec3 *v = (struct vec3 *)(data->vertex_list.data[i]);
+        Vec3 *v = (Vec3 *)(data->vertex_list.data[i]);
         fprintf(stream, "v %f %f %f\n", v->x, v->y, v->z);
     }
     for (size_t i = 0; i < data->vertex_normal_list.item_count; i++) {
-        struct vec3 *v = (struct vec3 *)(data->vertex_normal_list.data[i]);
+        Vec3 *v = (Vec3 *)(data->vertex_normal_list.data[i]);
         fprintf(stream, "vn %f %f %f\n", v->x, v->y, v->z);
     }
     for (size_t i = 0; i < data->vertex_texture_list.item_count; i++) {
-        struct vec3 *v = (struct vec3 *)(data->vertex_texture_list.data[i]);
+        Vec3 *v = (Vec3 *)(data->vertex_texture_list.data[i]);
         fprintf(stream, "vt %f %f %f\n", v->x, v->y, v->z);
     }
     // for (size_t i = 0; i < data->light_point_list.item_count; i++) {
@@ -531,15 +529,15 @@ void obj_growable_fprint(FILE *stream, obj_growable_scene_data *data) {
 
 void obj_scene_data_fprint(FILE *stream, obj_scene_data *data) {
     for (size_t i = 0; i < data->vertex_count; i++) {
-        struct vec3 *v = &data->vertex_list[i];
+        Vec3 *v = &data->vertex_list[i];
         fprintf(stream, "v %f %f %f\n", v->x, v->y, v->z);
     }
     for (size_t i = 0; i < data->vertex_normal_count; i++) {
-        struct vec3 *v = &data->vertex_normal_list[i];
+        Vec3 *v = &data->vertex_normal_list[i];
         fprintf(stream, "vn %f %f %f\n", v->x, v->y, v->z);
     }
     for (size_t i = 0; i < data->vertex_texture_count; i++) {
-        struct vec3 *v = &data->vertex_texture_list[i];
+        Vec3 *v = &data->vertex_texture_list[i];
         fprintf(stream, "vt %f %f %f\n", v->x, v->y, v->z);
     }
     for (size_t i = 0; i < data->face_count; i++) {
@@ -608,7 +606,7 @@ int scene_copy_to_device(obj_scene_data **dev_scene, obj_scene_data *host_scene)
     size_t curr_bytes, total_bytes;
     total_bytes = 0;
 
-    curr_bytes = temp_mirror.vertex_count * sizeof(struct vec3);
+    curr_bytes = temp_mirror.vertex_count * sizeof(Vec3);
     total_bytes += curr_bytes;
     err = cudaMalloc(&temp_mirror.vertex_list, curr_bytes);
     if (check_cuda_err(err)) return err;
@@ -616,7 +614,7 @@ int scene_copy_to_device(obj_scene_data **dev_scene, obj_scene_data *host_scene)
                      curr_bytes, cudaMemcpyHostToDevice);
     if (check_cuda_err(err)) return err;
 
-    curr_bytes = temp_mirror.vertex_normal_count * sizeof(struct vec3);
+    curr_bytes = temp_mirror.vertex_normal_count * sizeof(Vec3);
     total_bytes += curr_bytes;
     err = cudaMalloc(&temp_mirror.vertex_normal_list, curr_bytes);
     if (check_cuda_err(err)) return err;
@@ -624,7 +622,7 @@ int scene_copy_to_device(obj_scene_data **dev_scene, obj_scene_data *host_scene)
                      curr_bytes, cudaMemcpyHostToDevice);
     if (check_cuda_err(err)) return err;
 
-    curr_bytes = temp_mirror.vertex_texture_count * sizeof(struct vec3);
+    curr_bytes = temp_mirror.vertex_texture_count * sizeof(Vec3);
     total_bytes += curr_bytes;
     err = cudaMalloc(&temp_mirror.vertex_texture_list, curr_bytes);
     if (check_cuda_err(err)) return err;
