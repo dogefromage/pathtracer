@@ -7,6 +7,7 @@
 
 typedef struct {
     Vec3 o, r;
+    // TODO add inverse r for speedup during intersection test
 } Ray;
 
 inline std::ostream& operator<<(std::ostream& os, const Ray& ray) {

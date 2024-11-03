@@ -2,149 +2,112 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "assert.h"
-#include "bvh.h"
-#include "image.h"
-#include "renderer.h"
-#include "scene.h"
-#include "utils.h"
+#include <cassert>
 
-#ifdef USE_CPU_RENDER
+#include "dispatch.h"
+#include "config.h"
 
-int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
-                      size_t img_size, render_settings_t settings) {
-    time_t start, end;
+bool doVerbosePrinting = false;
 
-    printf("Launching host render... \n");
-    printf("Rendering %ld samples in batches of %ld, img size (%ld, %ld)\n",
-           settings.samples, settings.samples_per_round, settings.width, settings.height);
-
-    time(&start);
-
-    for (size_t s = 0; s < settings.samples;) {
-        for (size_t y = 0; y < settings.height; y++) {
-            for (size_t x = 0; x < settings.width; x++) {
-                render_host(h_img, h_bvh, h_scene, x, y, settings, s);
-            }
-        }
-
-        char filename[500];
-        sprintf(filename, "render.bmp");
-        // sprintf(filename, "render_%.4d.bmp", previous_samples);
-        write_bmp(h_img, settings.width, settings.height, filename);
-
-        time(&end);
-        double elapsed_seconds = difftime(end, start);
-
-        s += settings.samples_per_round;
-        settings.seed++;
-
-        float ksns = settings.width * settings.height * s / (1000 * elapsed_seconds);
-
-        printf("Rendered %ld / %ld samples in %.0fs - %.2f samples/s - %.2f kSN/s\n",
-               s, settings.samples, elapsed_seconds, s / elapsed_seconds, ksns);
-    }
-
-    return 0;
+void print_help(int argc, char* argv[], const render_settings_t& settings) {
+    fprintf(stderr, "Usage: %s [options] <path_to_obj>\n", argv[0]);
+    fprintf(stderr, "Expects an .obj file with right handed coordinate system.\n");
+    fprintf(stderr, "  -w <width>           Sets width\n");
+    fprintf(stderr, "  -h <height>          Sets height\n");
+    fprintf(stderr, "  -s <size>            Sets both width and height\n");
+    fprintf(stderr, "  -S <samples>         Sets image samples (default %d)\n", settings.samples);
+    fprintf(stderr, "  -r <samples/call>    Sets image samples per kernel call (default %d)\n", settings.samples_per_round);
+    fprintf(stderr, "  -d <seed>            Sets Seed (default %d)\n", settings.seed);
+    fprintf(stderr, "  -f <focal_length>    Focal length (default %.2f)\n", settings.focal_length);
+    fprintf(stderr, "  -c <sensor_height>   Sensor height (default %.2f)\n", settings.sensor_height);
+    fprintf(stderr, "  -v                   Do verbose printing (default false)\n");
 }
-
-#else
-
-int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
-                        size_t img_size, render_settings_t settings) {
-    obj_scene_data* d_scene;
-    if (scene_copy_to_device(&d_scene, h_scene)) {
-        return 1;
-    }
-
-    bvh_t* d_bvh;
-    if (bvh_copy_device(&d_bvh, h_bvh)) {
-        return 1;
-    }
-
-    time_t start, end;
-    cudaError_t err;
-
-    Vec3* d_img;
-    err = cudaMalloc(&d_img, img_size);
-    if (check_cuda_err(err)) return 1;
-
-    dim3 threads_per_block(16, 16);  // #threads must be factor of 32 and <= 1024
-
-    int grid_width = (settings.width + threads_per_block.x - 1) / threads_per_block.x;
-    int grid_height = (settings.height + threads_per_block.y - 1) / threads_per_block.y;
-    dim3 num_blocks(grid_width, grid_height);
-
-    printf("Launching kernel... \n");
-    printf("Rendering %ld samples in batches of %ld, img size (%ld, %ld)\n",
-           settings.samples, settings.samples_per_round, settings.width, settings.height);
-    printf("Kernel params <<<(%u,%u), (%u,%u)>>>\n",
-           num_blocks.x, num_blocks.y, threads_per_block.x, threads_per_block.y);
-    fflush(stdout);
-
-    time(&start);
-
-    for (size_t s = 0; s < settings.samples;) {
-        render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene,
-                                                           settings, s);
-        err = cudaDeviceSynchronize();
-        if (check_cuda_err(err)) return 1;
-
-        cudaMemcpy(h_img, d_img, img_size, cudaMemcpyDeviceToHost);
-
-        char filename[500];
-        sprintf(filename, "render.bmp");
-        // sprintf(filename, "render_%.4d.bmp", previous_samples);
-        write_bmp(h_img, settings.width, settings.height, filename);
-
-        time(&end);
-        double elapsed_seconds = difftime(end, start);
-
-        s += settings.samples_per_round;
-        settings.seed++;
-
-        float megaPixelSamplesS = settings.width * settings.height * s / (1000000 * elapsed_seconds);
-
-        printf("Rendered %ld / %ld samples in %.0fs - %.2f samples/s - %.2f MPS/s\n",
-               s, settings.samples, elapsed_seconds, s / elapsed_seconds, megaPixelSamplesS);
-        fflush(stdout);
-    }
-
-    err = cudaFree(d_img);
-    if (check_cuda_err(err)) return 1;
-
-    if (free_device_scene(d_scene)) return 1;
-    if (bvh_free_device(d_bvh)) return 1;
-
-    return 0;
-}
-
-#endif
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
+    
+    render_settings_t settings;
+    settings.width = -1;
+    settings.height = -1;
+    settings.samples = 100;
+    settings.samples_per_round = 10;
+    settings.seed = 42;
+    settings.focal_length = 0.4;
+    settings.sensor_height = 0.2;
+
+    int opt;
+    while ((opt = getopt(argc, argv, "w:h:s:S:r:d:f:c:v")) != -1) {
+        switch (opt) {
+            case 'w':
+                settings.width = atoi(optarg);
+                break;
+            case 'h':
+                settings.height = atoi(optarg);
+                break;
+            case 's':
+                settings.width = settings.height = atoi(optarg);
+                break;
+            case 'S':
+                settings.samples = atoi(optarg);
+                break;
+            case 'R':
+                settings.samples_per_round = atoi(optarg);
+                break;
+            case 'd':
+                settings.seed = atoi(optarg);
+                break;
+            case 'f':
+                settings.focal_length = atof(optarg);
+                break;
+            case 'c':
+                settings.sensor_height = atof(optarg);
+                break;
+            case 'v':
+                doVerbosePrinting = true;
+                break;
+            default:
+                print_help(argc, argv, settings);
+                return 1;
+        }
+    }
+
+    if (optind >= argc) {
         fprintf(stderr, "Expected a path to an .obj file.\n");
+        print_help(argc, argv, settings);
         return 1;
     }
 
-    char* obj_file = argv[1];
+    if (settings.width < 0 || settings.height < 0) {
+        fprintf(stderr, "Expected width and height for output image.\n");
+        print_help(argc, argv, settings);
+        return 1;
+    }
+    
+    char* obj_file = argv[optind];
+    printf("----------------------------------------\n");
+
+    printf("General Settings:\n");
+    printf("  Width:               %d\n", settings.width);
+    printf("  Height:              %d\n", settings.height);
+    printf("  Samples:             %d\n", settings.samples);
+    printf("  Samples per round:   %d\n", settings.samples_per_round);
+    printf("  Seed:                %d\n", settings.seed);
+
+    printf("\nCamera Settings:\n");
+    printf("  Focal Length:        %.2f\n", settings.focal_length);
+    printf("  Sensor Height:       %.2f\n", settings.sensor_height);
+
+    printf("\nFile Information:\n");
+    printf("  .obj file path:       %s\n", obj_file);
+    printf("----------------------------------------\n");
+
+    if (doVerbosePrinting) {
+        printf("\nVerbose printing enabled\n");
+    }
+
     obj_scene_data h_scene;
     if (parse_obj_scene(&h_scene, obj_file)) {
         return 1;
     }
-
-    render_settings_t settings;
-    // settings.width = 300;
-    // settings.height = 300;
-    settings.width = 1600;
-    settings.height = 1600;
-    settings.samples = 300;
-    settings.samples_per_round = 30;
-    settings.seed = 69;
-    // camera
-    // settings.focal_length = 1.5;
-    settings.focal_length = 0.4;
-    settings.sensor_height = 0.2;
 
     bvh_t h_bvh;
     bvh_build(h_bvh, h_scene);

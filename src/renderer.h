@@ -5,7 +5,7 @@
 #include "scene.h"
 
 typedef struct {
-    size_t width, height,
+    int width, height,
         seed,
         samples, samples_per_round;
         

@@ -2,18 +2,18 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "renderer.h"
-#include "scene.h"
-#include "random.h"
+#include <iostream>
+
 #include "brdf.h"
 #include "config.h"
 #include "mathops.h"
-#include <iostream>
+#include "random.h"
+#include "renderer.h"
+#include "scene.h"
 
 static PLATFORM void
-get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene, 
-    float u, float v, const render_settings_t& settings) {
-
+get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
+               float u, float v, const render_settings_t& settings) {
     Vec3 P = scene->vertex_list[scene->camera.position];
     Vec3 T = scene->vertex_list[scene->camera.target];
     Vec3 Up = scene->vertex_normal_list[scene->camera.updir];
@@ -32,8 +32,7 @@ get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
     Mat3 A(
         U.x, V.x, W.x,
         U.y, V.y, W.y,
-        U.z, V.z, W.z
-    );
+        U.z, V.z, W.z);
 
     // camera coordinate vector for pixel
     Vec3 x = {u, v, 1};
@@ -46,7 +45,7 @@ get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
 // offset new ray slightly from triangle in normal dir
 #define SAVE_RAY_EPS 1e-6
 
-static PLATFORM void 
+static PLATFORM void
 initialize_safe_ray(Ray& ray, const Vec3& origin, const Vec3& dir, const Vec3& normal) {
     ray.o = origin + SAVE_RAY_EPS * normal;
     ray.r = dir;
@@ -66,17 +65,15 @@ intersect(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scen
 #endif
 }
 
-#define RR_PROB_MAX 0.95
+#define RR_PROB_MAX 0.99
 
 static PLATFORM Vec3
 integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
                        Ray ray, rand_state_t& rstate) {
-
-    Vec3 light = { 0, 0, 0 };
-    Vec3 throughput = { 1, 1, 1 };
+    Vec3 light = {0, 0, 0};
+    Vec3 throughput = {1, 1, 1};
 
     for (int depth = 0;; depth++) {
-
         intersection_t hit;
         intersect(bvh, scene, ray, hit);
         if (!hit.has_hit) {
@@ -86,7 +83,6 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
         // direct light, attenuate using throughput which includes indirect lighting penalty
         Vec3 Le = hit.mat->emit * throughput;
         light += Le;
-
 
         float rr_prob = fminf(throughput.maxComponent(), RR_PROB_MAX);
         if (random_uniform(rstate) >= rr_prob) {
@@ -108,7 +104,7 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
         // find next throughput
         throughput *= brdf.brdf * (cosTheta / (brdf.prob_i * rr_prob));
     }
-    
+
     return light;
 }
 
@@ -116,18 +112,17 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
 
 __host__ void
 render_host(Vec3* img,
-       const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
-       int pixel_x, int pixel_y,
-       render_settings_t settings, int previous_samples) {
-
+            const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+            int pixel_x, int pixel_y,
+            render_settings_t settings, int previous_samples) {
     uint64_t tid = pixel_y * settings.width + pixel_x;
 
     rand_state_t rstate;
     random_init(rstate, settings.seed, tid);
 
-    Vec3 total_light = { 0, 0, 0 };
+    Vec3 total_light = {0, 0, 0};
 
-    for (size_t i = 0; i < settings.samples; i++) {
+    for (int i = 0; i < settings.samples; i++) {
         // float sensor_variance = 0.33;
         float sensor_x = (float)pixel_x; /* TODO sensor variance */
         float sensor_y = (float)pixel_y; /* TODO sensor variance */
@@ -147,17 +142,15 @@ render_host(Vec3* img,
     int total_samples = settings.samples_per_round + previous_samples;
     Vec3& pixel = img[pixel_y * settings.width + pixel_x];
 
-    pixel = pixel * (previous_samples / (float)total_samples)
-        + total_light * (settings.samples_per_round / (float)total_samples);
+    pixel = pixel * (previous_samples / (float)total_samples) + total_light * (settings.samples_per_round / (float)total_samples);
 }
 
 #else
 
 __global__ void
 render_kernel(Vec3* img,
-       const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
-       render_settings_t settings, int previous_samples) {
-        
+              const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+              render_settings_t settings, int previous_samples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
@@ -170,7 +163,7 @@ render_kernel(Vec3* img,
     rand_state_t rstate;
     random_init(rstate, settings.seed, curand_tid);
 
-    Vec3 total_light = { 0, 0, 0 };
+    Vec3 total_light = {0, 0, 0};
 
     for (int i = 0; i < settings.samples_per_round; i++) {
         float sensor_variance = 0.33;
@@ -192,8 +185,7 @@ render_kernel(Vec3* img,
     int total_samples = settings.samples_per_round + previous_samples;
     Vec3 last_pixel = img[pixel_y * settings.width + pixel_x];
 
-    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples)
-        + total_light * (settings.samples_per_round / (float)total_samples);
+    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) + total_light * (settings.samples_per_round / (float)total_samples);
 
     img[pixel_y * settings.width + pixel_x] = next_pixel;
 }

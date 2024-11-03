@@ -4,6 +4,7 @@
 #include "bvh.h"
 #include "utils.h"
 #include <iostream>
+#include <limits>
 
 static Vec3
 calculate_face_centroid(const obj_scene_data& scene, obj_face& face) {
@@ -49,12 +50,16 @@ static float aabb_area(const aabb_t& aabb) {
     return e.x * e.y + e.y * e.z + e.z * e.x;
 }
 
+static void aabb_grow_point(aabb_t& aabb, const Vec3& p) {
+    aabb.min = Vec3::min(aabb.min, p);
+    aabb.max = Vec3::max(aabb.max, p);
+}
+
 static void aabb_grow_face(const obj_scene_data& scene, aabb_t& aabb, uint32_t faceIndex) {
     const obj_face &face = scene.face_list[faceIndex];
     for (uint32_t j = 0; j < face.vertex_count; j++) {
         const Vec3& v = scene.vertex_list[face.vertices[j].position];
-        aabb.min = Vec3::min(aabb.min, v);
-        aabb.max = Vec3::max(aabb.max, v);
+        aabb_grow_point(aabb, v);
     }
 }
 
@@ -223,17 +228,23 @@ find_split_plane_centroids(const obj_scene_data& scene, bvh_t& bvh, bvh_node_t& 
 static float
 find_best_split_plane_bands(const obj_scene_data& scene, bvh_t& bvh, bvh_node_t& node,
                       int* bestAxis, float* bestSplit, int numBands) {
+
+    aabb_t centroidBounds;
+    aabb_init(centroidBounds);
+    for (size_t i = node.start; i < node.end; i++) {
+        aabb_grow_point(centroidBounds, bvh.centroids[bvh.indices[i]]);
+    }
+
     float bestCost = 1e30;
     for (int a = 0; a < 3; a++) {
-        float boundsMin = node.bounds.min[a];
-        float boundsMax = node.bounds.max[a];
-        if (boundsMin == boundsMax) {
+        float boundsMin = centroidBounds.min[a];
+        float boundsMax = centroidBounds.max[a];
+        if (std::abs(boundsMin - boundsMax) < std::numeric_limits<float>::epsilon()) {
             continue;
         }
         float scale = (boundsMax - boundsMin) / numBands;
         for (int i = 1; i < numBands; i++) {
             float candidate = boundsMin + i * scale;
-            // mfloat_t candidate = bvh->centroids[bvh->indices[i]].v[a];
             float cost = evaluate_sah(scene, bvh, node, a, candidate);
             if (cost < bestCost) {
                 *bestAxis = a;
@@ -279,7 +290,7 @@ subdivide(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats
     // partitioning
     int i = node.start;
     int j = node.end - 1;
-    while (i < j) {
+    while (i <= j) {
         if (bvh.centroids[bvh.indices[i]][bestAxis] < bestPos) {
             i++;
         } else {
@@ -338,7 +349,11 @@ calculate_stats(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh
 
 static void
 print_stats(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats) {
-    printf("bvh_t stats:\n");
+    if (!doVerbosePrinting) {
+        return;
+    }
+
+    printf("\nbvh_t stats:\n");
     printf("  node count = %u\n", bvh.nodeCount);
     printf("  optimal node count = %u\n", bvh.maxNodeCount);
     printf("  number leafs = %u\n", stats.numberLeaves);
@@ -351,7 +366,7 @@ print_stats(const obj_scene_data& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_sta
 
 void
 bvh_build(bvh_t& bvh, const obj_scene_data& scene) {
-    printf("Building bvh_t... \n");
+    printf("Building bvh_t...  ");
 
     bvh_stats_t stats;
     memset(&stats, 0, sizeof(bvh_stats_t));
@@ -393,6 +408,8 @@ bvh_build(bvh_t& bvh, const obj_scene_data& scene) {
             stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
         exit(EXIT_FAILURE);
     }
+
+    printf("Done\n");
 }
 
 __host__ void

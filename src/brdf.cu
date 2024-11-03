@@ -33,7 +33,9 @@ sample_brdf(brdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_stat
         out.prob_i = 1 / (2 * M_PIf);  /* probability of chosen direction */
         out.brdf = hit.mat->diff / M_PIf;
     } else {
-        // is specular
+        
+        // just a makeshift mirror material
+
         Vec3 v = -v_inv;
         float cos_theta = v.dot(hit.normal);
 
