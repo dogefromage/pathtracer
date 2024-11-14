@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-#include "brdf.h"
+#include "bsdf.h"
 #include "config.h"
 #include "mathops.h"
 #include "random.h"
@@ -13,7 +13,7 @@
 
 static PLATFORM void
 get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
-               float u, float v, const render_settings_t& settings) {
+               float u, float v, const settings_t& settings) {
     Vec3 P = scene->vertex_list[scene->camera.position];
     Vec3 T = scene->vertex_list[scene->camera.target];
     Vec3 Up = scene->vertex_normal_list[scene->camera.updir];
@@ -22,9 +22,9 @@ get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
     Vec3 U = W.cross(Up);
     Vec3 V = U.cross(W);
 
-    U = U.normalized() * 0.5 * settings.sensor_height;
-    V = V.normalized() * 0.5 * settings.sensor_height;
-    W = W.normalized() * settings.focal_length;
+    U = U.normalized() * 0.5 * settings.camera.sensor_height;
+    V = V.normalized() * 0.5 * settings.camera.sensor_height;
+    W = W.normalized() * settings.camera.focal_length;
 
     // U, V, W build orthogonal basis for camera ray direction
     // D = u*U + v*V + 1*W
@@ -47,7 +47,8 @@ get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
 
 static PLATFORM void
 initialize_safe_ray(Ray& ray, const Vec3& origin, const Vec3& dir, const Vec3& normal) {
-    ray.o = origin + SAVE_RAY_EPS * normal;
+    bool transmit = dir.dot(normal) < 0;
+    ray.o = origin + SAVE_RAY_EPS * (transmit ? -normal : normal);
     ray.r = dir;
 }
 
@@ -89,20 +90,20 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
             break;  // ray dies
         }
 
-        brdf_t brdf;
-        sample_brdf(brdf, ray.r, hit, rstate);
-
-        float cosTheta = hit.normal.dot(brdf.omega_i);
+        bsdf_t bsdf;
+        sample_bsdf(bsdf, ray.r, hit, rstate);
+        
+        float cosTheta = std::abs(hit.normal.dot(bsdf.omega_i));
 
         // std::cout << "Ray before: " << ray << std::endl;
 
         // set next ray
-        initialize_safe_ray(ray, hit.position, brdf.omega_i, hit.normal);
+        initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.normal);
 
         // std::cout << "Ray after:  " << ray << std::endl;
 
         // find next throughput
-        throughput *= brdf.brdf * (cosTheta / (brdf.prob_i * rr_prob));
+        throughput *= bsdf.bsdf * (cosTheta / (bsdf.prob_i * rr_prob));
     }
 
     return light;
@@ -114,7 +115,7 @@ __host__ void
 render_host(Vec3* img,
             const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
             int pixel_x, int pixel_y,
-            render_settings_t settings, int previous_samples) {
+            settings_t settings, int previous_samples) {
     uint64_t tid = pixel_y * settings.width + pixel_x;
 
     rand_state_t rstate;
@@ -150,28 +151,28 @@ render_host(Vec3* img,
 __global__ void
 render_kernel(Vec3* img,
               const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
-              render_settings_t settings, int previous_samples) {
+              settings_t settings, int previous_samples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
-    if (pixel_x >= settings.width || pixel_y >= settings.height) {
+    if (pixel_x >= settings.output.width || pixel_y >= settings.output.height) {
         return;  // out of image
     }
 
-    uint64_t curand_tid = pixel_y * settings.width + pixel_x;
+    uint64_t curand_tid = pixel_y * settings.output.width + pixel_x;
 
     rand_state_t rstate;
-    random_init(rstate, settings.seed, curand_tid);
+    random_init(rstate, settings.sampling.seed, curand_tid);
 
     Vec3 total_light = {0, 0, 0};
 
-    for (int i = 0; i < settings.samples_per_round; i++) {
+    for (int i = 0; i < settings.sampling.samples_per_round; i++) {
         float sensor_variance = 0.33;
         float sensor_x = (float)pixel_x + sensor_variance * random_normal(rstate);
         float sensor_y = (float)pixel_y + sensor_variance * random_normal(rstate);
 
-        float u = (2 * sensor_x - settings.width) / (float)settings.height;
-        float v = (2 * sensor_y - settings.height) / (float)settings.height;
+        float u = (2 * sensor_x - settings.output.width) / (float)settings.output.height;
+        float v = (2 * sensor_y - settings.output.height) / (float)settings.output.height;
 
         Ray camera_ray;
         get_camera_ray(camera_ray, scene, u, v, settings);
@@ -180,14 +181,15 @@ render_kernel(Vec3* img,
         total_light += current_light;
     }
 
-    total_light /= (float)settings.samples_per_round;
+    total_light /= (float)settings.sampling.samples_per_round;
 
-    int total_samples = settings.samples_per_round + previous_samples;
-    Vec3 last_pixel = img[pixel_y * settings.width + pixel_x];
+    int total_samples = settings.sampling.samples_per_round + previous_samples;
+    Vec3 last_pixel = img[pixel_y * settings.output.width + pixel_x];
 
-    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) + total_light * (settings.samples_per_round / (float)total_samples);
+    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) + 
+        total_light * (settings.sampling.samples_per_round / (float)total_samples);
 
-    img[pixel_y * settings.width + pixel_x] = next_pixel;
+    img[pixel_y * settings.output.width + pixel_x] = next_pixel;
 }
 
 #endif

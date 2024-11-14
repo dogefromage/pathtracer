@@ -1,21 +1,21 @@
 # pathtracer
 
-Started out as a small project over the break and has spiraled out of control over time. Runs on cuda-12.5. Build the project using ```make```.
+Started out as a small project over the break and has spiraled out of control over time. Runs on cuda-12.5.
+
+Usage:
+- Build the program using ```make``` (requires cuda compiler)
+- The output will be placed in the ```./bin``` folder
+- Test by writing ```./bin/raytracer -c pathtracer.yaml assets/spheres.obj ```
+- The output will be rendered to ```./render.bmp```
 
 ```sh
-Place scene .obj and .mtl into assets/
-
+# usage:
 Usage: ./bin/raytracer [options] <path_to_obj>
 Expects an .obj file with right handed coordinate system.
-  -w <width>         Sets width
-  -h <height>        Sets height
-  -s <size>          Sets both width and height
-  -S <samples>       Sets image samples count (default 100)
-  -r <samples/call>  Sets image samples per kernel call (default 10)
-  -d <seed>          Sets Seed (default 42)
-  -f <focal_length>  Focal length (default 0.40)
-  -c <sensor_height> Sensor height (default 0.20)
-  -v                 Do verbose printing (default false)
+  -c <pathtracer.yaml>  Pathtracer render settings file.
+
+# pathtracer.yaml layout:
+TODO
 
 # example output:
 Parsing assets/spheres.obj... Done 
@@ -25,29 +25,29 @@ Copying bvh_t to device... Done [86kB]
 Launching kernel... 
 Rendering 300 samples in batches of 10, img size (1600, 1600)
 Kernel params <<<(100,100), (16,16)>>>
-Rendered 10 / 300 samples in 1.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 20 / 300 samples in 2.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 30 / 300 samples in 3.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 40 / 300 samples in 4.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 50 / 300 samples in 5.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 60 / 300 samples in 6.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 70 / 300 samples in 7.0s - 10.00 samples/s - 25.60 MPS/s
-Rendered 80 / 300 samples in 8.0s - 10.00 samples/s - 25.60 MPS/s
+Rendered 10 / 300 samples in 0.3s - 35.59 samples/s - 12.81 MPS/s
+Rendered 20 / 300 samples in 0.4s - 45.25 samples/s - 16.29 MPS/s
+Rendered 30 / 300 samples in 0.6s - 52.17 samples/s - 18.78 MPS/s
+Rendered 40 / 300 samples in 0.7s - 56.58 samples/s - 20.37 MPS/s
+Rendered 50 / 300 samples in 0.8s - 59.74 samples/s - 21.51 MPS/s
+Rendered 60 / 300 samples in 1.0s - 61.98 samples/s - 22.31 MPS/s
+Rendered 70 / 300 samples in 1.1s - 63.64 samples/s - 22.91 MPS/s
+Rendered 80 / 300 samples in 1.2s - 64.99 samples/s - 23.40 MPS/s
 ...
 ```
 
-![Latest render](/render.bmp)
+![Latest render](/glass.bmp)
 
 ## Currently implements:
 * basic path tracing on gpu using CUDA or optionally using CPU
 * handles large .obj / .mtl scenes
+* BSDF global illumination and transmission
 * rendering to .bmp image
 * BVH construction on CPU with surface area heuristic
 
 ## TODO:
-* better materials (already in .mtl file but only partially used)
-* importance sampling
 * improve performance of BVH construction
+* more materials
 
 ## Used sources and useful stuff
 

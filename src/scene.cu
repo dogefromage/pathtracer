@@ -26,7 +26,7 @@ void obj_set_material_defaults(obj_material *mtl) {
     mtl->emit.set(0.0);
 
     mtl->spec_exp = 0;
-    mtl->dissolved = 1;
+    mtl->dissolve = 1;
     mtl->refract_index = 1;
 
     mtl->model = 2;
@@ -200,7 +200,7 @@ int obj_parse_mtl_file(obj_growable_scene_data *scene) {
         }
         // transparent
         else if (!strcmp(current_token, "d") && current_mtl != NULL) {
-            current_mtl->dissolved = atof(strtok(NULL, " \t"));
+            current_mtl->dissolve = atof(strtok(NULL, " \t"));
         }
         // // reflection
         // else if (!strcmp(current_token, "r") && current_mtl != NULL) {

@@ -23,7 +23,7 @@ typedef struct {
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
     Vec3 amb, diff, spec, emit;
-    float spec_exp, dissolved, refract_index;
+    float spec_exp, dissolve, refract_index;
     int model;
 } obj_material;
 

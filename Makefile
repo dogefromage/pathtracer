@@ -7,7 +7,7 @@ CUDA_LINK_LIBS= -lcudart -lcurand
 # CC_FLAGS = -Wall -Wextra -g -G -I./include -std=gnu99
 
 NVCC = nvcc
-NVCC_FLAGS = -I./include -I$(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall" -g
+NVCC_FLAGS = -I./include -I$(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall"
 
 # Directories
 SRC_DIR = src

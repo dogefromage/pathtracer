@@ -50,7 +50,7 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 #else
 
 int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
-                        size_t img_size, render_settings_t settings) {
+                        size_t img_size, settings_t settings) {
     obj_scene_data* d_scene;
     if (scene_copy_to_device(&d_scene, h_scene)) {
         return 1;
@@ -69,20 +69,20 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 
     dim3 threads_per_block(16, 16);  // #threads must be factor of 32 and <= 1024
 
-    int grid_width = (settings.width + threads_per_block.x - 1) / threads_per_block.x;
-    int grid_height = (settings.height + threads_per_block.y - 1) / threads_per_block.y;
+    int grid_width = (settings.output.width + threads_per_block.x - 1) / threads_per_block.x;
+    int grid_height = (settings.output.height + threads_per_block.y - 1) / threads_per_block.y;
     dim3 num_blocks(grid_width, grid_height);
 
     printf("Launching kernel... \n");
     printf("Rendering %d samples in batches of %d, img size (%d, %d)\n",
-           settings.samples, settings.samples_per_round, settings.width, settings.height);
+           settings.sampling.samples, settings.sampling.samples_per_round, settings.output.width, settings.output.height);
     printf("Kernel params <<<(%u,%u), (%u,%u)>>>\n",
            num_blocks.x, num_blocks.y, threads_per_block.x, threads_per_block.y);
     fflush(stdout);
 
     auto startTime = std::chrono::system_clock::now();
 
-    for (int s = 0; s < settings.samples;) {
+    for (int s = 0; s < settings.sampling.samples;) {
         render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene,
                                                          settings, s);
         err = cudaDeviceSynchronize();
@@ -93,20 +93,20 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
         char filename[500];
         sprintf(filename, "render.bmp");
         // sprintf(filename, "render_%.4d.bmp", previous_samples);
-        write_bmp(h_img, settings.width, settings.height, filename);
+        write_bmp(h_img, settings.output.width, settings.output.height, filename);
 
         auto endTime = std::chrono::system_clock::now();
         int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>
             (endTime - startTime).count();
         float elapsedTime = elapsedMillis / (float)1000;
 
-        s += settings.samples_per_round;
-        settings.seed++;
+        s += settings.sampling.samples_per_round;
+        settings.sampling.seed++;
 
-        float megaPixelSamplesS = settings.width * settings.height * s / (1'000'000.0 * elapsedTime);
+        float megaPixelSamplesS = settings.output.width * settings.output.height * s / (1'000'000.0 * elapsedTime);
 
         printf("Rendered %d / %d samples in %.1fs - %.2f samples/s - %.2f MPS/s\n",
-               s, settings.samples, elapsedTime, s / elapsedTime, megaPixelSamplesS);
+               s, settings.sampling.samples, elapsedTime, s / elapsedTime, megaPixelSamplesS);
         fflush(stdout);
     }
 
