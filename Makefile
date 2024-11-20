@@ -9,6 +9,9 @@ CUDA_LINK_LIBS= -lcudart -lcurand
 NVCC = nvcc
 NVCC_FLAGS = -I./include -I$(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall"
 
+#-O3 
+#--use_fast_math
+
 # Directories
 SRC_DIR = src
 BUILD_DIR = build

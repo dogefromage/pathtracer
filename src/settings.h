@@ -2,6 +2,7 @@
 #include <functional>
 
 #include <string>
+#include "mathops.h"
 
 typedef struct {
     struct {
@@ -19,6 +20,14 @@ typedef struct {
     struct {
         bool verbose = false;
     } debug;
+
+    struct {
+        Vec3 clear_light;
+        struct {
+            Vec3 direction, light;
+            float angular_diameter, penumbra;
+        } sun;     
+    } world;
 
 } settings_t;
 

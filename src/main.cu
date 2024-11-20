@@ -7,6 +7,7 @@
 #include "dispatch.h"
 #include "config.h"
 #include "settings.h"
+#include "lst.h"
 
 bool doVerbosePrinting = false;
 
@@ -46,8 +47,13 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // bounding volume hierarchy
     bvh_t h_bvh;
     bvh_build(h_bvh, h_scene);
+    
+    // light source tree
+    lst_t h_lst;
+    lst_build(h_lst, h_scene);
 
     size_t img_size = sizeof(Vec3) * settings.output.width * settings.output.height;
 
@@ -55,11 +61,11 @@ int main(int argc, char* argv[]) {
     assert(h_img);
 
 #ifdef USE_CPU_RENDER
-    if (render_image_host(&h_scene, &h_bvh, h_img, img_size, settings)) {
+    if (render_image_host(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings)) {
         exit(EXIT_FAILURE);
     }
 #else
-    if (render_image_device(&h_scene, &h_bvh, h_img, img_size, settings)) {
+    if (render_image_device(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings)) {
         exit(EXIT_FAILURE);
     }
 #endif
@@ -68,6 +74,7 @@ int main(int argc, char* argv[]) {
     h_img = NULL;
     delete_obj_data(&h_scene);
     bvh_free_host(h_bvh);
+    lst_free_host(h_lst);
 
     return 0;
 }

@@ -7,6 +7,7 @@
 #include "image.h"
 #include "utils.h"
 #include <chrono>
+#include "lst.h"
 
 #ifdef USE_CPU_RENDER
 
@@ -49,7 +50,7 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 
 #else
 
-int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
+int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_img,
                         size_t img_size, settings_t settings) {
     obj_scene_data* d_scene;
     if (scene_copy_to_device(&d_scene, h_scene)) {
@@ -61,11 +62,18 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
         return 1;
     }
 
+    lst_t* d_lst;
+    if (lst_copy_device(&d_lst, h_lst)) {
+        return 1;
+    }
+
     cudaError_t err;
 
     Vec3* d_img;
     err = cudaMalloc(&d_img, img_size);
-    if (check_cuda_err(err)) return 1;
+    if (check_cuda_err(err)) {
+        return 1;
+    }
 
     dim3 threads_per_block(16, 16);  // #threads must be factor of 32 and <= 1024
 
@@ -83,7 +91,7 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
     auto startTime = std::chrono::system_clock::now();
 
     for (int s = 0; s < settings.sampling.samples;) {
-        render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene,
+        render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene, d_lst,
                                                          settings, s);
         err = cudaDeviceSynchronize();
         if (check_cuda_err(err)) return 1;
@@ -115,6 +123,7 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 
     if (free_device_scene(d_scene)) return 1;
     if (bvh_free_device(d_bvh)) return 1;
+    if (lst_free_device(d_lst)) return 1;
 
     return 0;
 }

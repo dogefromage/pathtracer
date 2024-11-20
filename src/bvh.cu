@@ -28,7 +28,10 @@ calculate_face_centroid(const obj_scene_data& scene, obj_face& face) {
         totalArea += triArea;
     }
 
-    assert(totalArea);
+    if (totalArea == 0) {
+        return scene.vertex_list[face.vertices[0].position];
+    }
+    
     centroid /= totalArea;
 
     // for (int i = 0; i < face->vertex_count; i++) {

@@ -6,6 +6,7 @@
 
 #include "bsdf.h"
 #include "config.h"
+#include "lst.h"
 #include "mathops.h"
 #include "random.h"
 #include "renderer.h"
@@ -66,11 +67,49 @@ intersect(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scen
 #endif
 }
 
+// static PLATFORM Vec3 L_skybox(const __restrict__ bvh_t* bvh,
+//                               const __restrict__ obj_scene_data* scene,
+//                               const __restrict__ lst_t* lst,
+//                               Ray ray, rand_state_t& rstate, settings_t& settings) {
+//     auto& sun = settings.world.sun;
+//     float light_angle = acosf(ray.r.dot(sun.direction));
+
+//     float a1 = 0.5 * sun.angular_diameter;
+//     float a2 = a1 + sun.penumbra;
+
+//     float light_amt = 0;
+
+//     if (light_angle < a1) {
+//         light_amt = 1;
+//     } else if (light_angle < a2) {
+//         light_amt = 1 - (light_angle - a1) / (a2 - a1);
+//     }
+
+//     return light_amt * sun.light + (1.0 - light_amt) * settings.world.clear_light;
+// }
+
+// static PLATFORM Vec3
+// integrate_Ld(const __restrict__ bvh_t* bvh,
+//              const __restrict__ obj_scene_data* scene,
+//              const __restrict__ lst_t* lst,
+//              Ray ray, rand_state_t& rstate, settings_t& settings) {
+//     light_sample_t ls;
+//     lst_sample(ls, lst, scene);
+    
+//     // calculate visibility
+
+//     // find light blabla...
+
+//     // https://www.youtube.com/watch?v=FU1dbi827LY&t=1189s
+// }
+
 #define RR_PROB_MAX 0.99
 
 static PLATFORM Vec3
-integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
-                       Ray ray, rand_state_t& rstate) {
+integrate_Li_iterative(const __restrict__ bvh_t* bvh,
+                       const __restrict__ obj_scene_data* scene,
+                       const __restrict__ lst_t* lst,
+                       Ray ray, rand_state_t& rstate, settings_t& settings) {
     Vec3 light = {0, 0, 0};
     Vec3 throughput = {1, 1, 1};
 
@@ -78,6 +117,9 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
         intersection_t hit;
         intersect(bvh, scene, ray, hit);
         if (!hit.has_hit) {
+            // // skybox light
+            // Vec3 Lsky = throughput * L_skybox(bvh, scene, ray, rstate, settings);
+            // light += Lsky;
             break;
         }
 
@@ -92,15 +134,11 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh, const __restrict__ obj_sce
 
         bsdf_t bsdf;
         sample_bsdf(bsdf, ray.r, hit, rstate);
-        
-        float cosTheta = std::abs(hit.normal.dot(bsdf.omega_i));
 
-        // std::cout << "Ray before: " << ray << std::endl;
+        float cosTheta = std::abs(hit.normal.dot(bsdf.omega_i));
 
         // set next ray
         initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.normal);
-
-        // std::cout << "Ray after:  " << ray << std::endl;
 
         // find next throughput
         throughput *= bsdf.bsdf * (cosTheta / (bsdf.prob_i * rr_prob));
@@ -150,7 +188,9 @@ render_host(Vec3* img,
 
 __global__ void
 render_kernel(Vec3* img,
-              const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+              const __restrict__ bvh_t* bvh,
+              const __restrict__ obj_scene_data* scene,
+              const __restrict__ lst_t* lst,
               settings_t settings, int previous_samples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -158,6 +198,15 @@ render_kernel(Vec3* img,
     if (pixel_x >= settings.output.width || pixel_y >= settings.output.height) {
         return;  // out of image
     }
+
+    settings.world.sun.direction = {1, 1, 1};
+    settings.world.sun.direction.normalize();
+    settings.world.sun.light = 3 * Vec3(1, 1, 1);
+    settings.world.sun.angular_diameter = 1;
+    settings.world.sun.penumbra = 0.1;
+    // settings.world.sun.angular_diameter = 0.00872665;
+    // settings.world.sun.penumbra = 0.001;
+    settings.world.clear_light = 0.15 * Vec3(0.8, 0.8, 0.8);
 
     uint64_t curand_tid = pixel_y * settings.output.width + pixel_x;
 
@@ -177,7 +226,7 @@ render_kernel(Vec3* img,
         Ray camera_ray;
         get_camera_ray(camera_ray, scene, u, v, settings);
 
-        Vec3 current_light = integrate_Li_iterative(bvh, scene, camera_ray, rstate);
+        Vec3 current_light = integrate_Li_iterative(bvh, scene, lst, camera_ray, rstate, settings);
         total_light += current_light;
     }
 
@@ -186,8 +235,8 @@ render_kernel(Vec3* img,
     int total_samples = settings.sampling.samples_per_round + previous_samples;
     Vec3 last_pixel = img[pixel_y * settings.output.width + pixel_x];
 
-    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) + 
-        total_light * (settings.sampling.samples_per_round / (float)total_samples);
+    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) +
+                      total_light * (settings.sampling.samples_per_round / (float)total_samples);
 
     img[pixel_y * settings.output.width + pixel_x] = next_pixel;
 }
