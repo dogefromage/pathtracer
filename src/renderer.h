@@ -21,6 +21,6 @@ render_kernel(Vec3* img,
        const __restrict__ bvh_t* bvh, 
        const __restrict__ scene_t* scene,
        const __restrict__ lst_t* lst,
-       settings_t settings, int previous_samples);
+       settings_t settings, int previousSamples, int currentSamples);
 
 #endif

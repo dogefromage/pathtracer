@@ -216,7 +216,7 @@ scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) 
     const BufferView& bufView = model.bufferViews[acc.bufferView];
     const Buffer& buf = model.buffers[bufView.buffer];
 
-    AABB actualBounds = AABB::Empty();
+    AABB actualBounds;
     AABB givenBounds;
     bool hasGivenBounds = false;
 
@@ -240,7 +240,7 @@ scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) 
         // v.print();
         list.push_back(v);
 
-        actualBounds = actualBounds.including(v);
+        actualBounds.grow(v);
 
         if (hasGivenBounds) {
             // sanity check
@@ -478,7 +478,9 @@ void scene_copy_to_device(scene_t** dev_scene, scene_t* host_scene) {
 
     totalSize += copy_device_struct(dev_scene, &placeholder);
 
-    printf("Done [%ldkB]\n", totalSize / 1000);
+    char buf[64];
+    human_readable_size(buf, totalSize);
+    printf("Done [%s]\n", buf);
 }
 
 void free_device_scene(scene_t* dev_scene) {
@@ -486,10 +488,10 @@ void free_device_scene(scene_t* dev_scene) {
     scene_t placeholder;
     copy_host_struct(&placeholder, dev_scene);
 
-    host_free(placeholder.vertices.items);
-    host_free(placeholder.faces.items);
-    host_free(placeholder.lights.items);
-    host_free(placeholder.materials.items);
+    device_free(placeholder.vertices.items);
+    device_free(placeholder.faces.items);
+    device_free(placeholder.lights.items);
+    device_free(placeholder.materials.items);
 
-    host_free(dev_scene);
+    device_free(dev_scene);
 }

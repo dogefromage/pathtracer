@@ -40,14 +40,14 @@ Rendered 80 / 300 samples in 1.2s - 64.99 samples/s - 23.40 MPS/s
 
 ## Currently implements:
 * basic path tracing on gpu using CUDA or optionally using CPU
-* handles large .obj / .mtl scenes
+* handles large scenes thanks to BVH spacial acceleration structure
 * BSDF global illumination and transmission
-* rendering to .bmp image
+* rendering to .png image
 * BVH construction on CPU with surface area heuristic
 
 ## TODO:
-* improve performance of BVH construction
-* more materials
+* more materials / principled bsdf
+* light source sampling
 
 ## Used sources and useful stuff
 

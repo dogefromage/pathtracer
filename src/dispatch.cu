@@ -2,12 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <chrono>
+
 #include "assert.h"
 #include "dispatch.h"
 #include "image.h"
-#include "utils.h"
-#include <chrono>
 #include "lst.h"
+#include "utils.h"
 
 #ifdef USE_CPU_RENDER
 
@@ -32,8 +33,7 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
         write_bmp(h_img, settings.width, settings.height, filename);
 
         auto endTime = std::chrono::system_clock::now();
-        int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>
-            (endTime - startTime).count();
+        int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         float elapsedTime = elapsedMillis / (float)1000;
 
         s += settings.samples_per_round;
@@ -51,7 +51,7 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 #else
 
 void render_image_device(scene_t* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_img,
-                        size_t img_size, settings_t settings, char* output_path) {
+                         size_t img_size, settings_t settings, char* output_path) {
     scene_t* d_scene;
     scene_copy_to_device(&d_scene, h_scene);
 
@@ -84,30 +84,37 @@ void render_image_device(scene_t* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_i
 
     auto startTime = std::chrono::system_clock::now();
 
-    for (int s = 0; s < settings.sampling.samples;) {
+    int renderedSamples = 0;
+    while (renderedSamples < settings.sampling.samples) {
+
+        int currentSamples = min(settings.sampling.samples_per_round,
+                                 settings.sampling.samples - renderedSamples);
+
         render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene, d_lst,
-                                                         settings, s);
+                                                         settings, renderedSamples, currentSamples);
         err = cudaDeviceSynchronize();
         if (check_cuda_err(err)) {
             exit(EXIT_FAILURE);
         }
 
         cudaMemcpy(h_img, d_img, img_size, cudaMemcpyDeviceToHost);
-
         write_image(h_img, settings.output.width, settings.output.height, output_path);
 
-        auto endTime = std::chrono::system_clock::now();
-        int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>
-            (endTime - startTime).count();
-        float elapsedTime = elapsedMillis / (float)1000;
+        renderedSamples += currentSamples;
 
-        s += settings.sampling.samples_per_round;
+        auto endTime = std::chrono::system_clock::now();
+        int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        float elapsedTime = elapsedMillis / 1000.0f;
+
         settings.sampling.seed++;
 
-        float megaPixelSamplesS = settings.output.width * settings.output.height * s / (1'000'000.0 * elapsedTime);
+        float megaSamplesPerSecond = (float)settings.output.width * settings.output.height * renderedSamples
+            / (1'000'000.0 * elapsedTime);
 
-        printf("Rendered %d / %d samples in %.1fs - %.2f samples/s - %.2f MPS/s\n",
-               s, settings.sampling.samples, elapsedTime, s / elapsedTime, megaPixelSamplesS);
+        float samplesPerPixelSecond = renderedSamples / elapsedTime;
+
+        printf("Rendered %d out of %d S/px in %.1fs - %.2f S/px*s - %.2f MS/s\n",
+               renderedSamples, settings.sampling.samples, elapsedTime, samplesPerPixelSecond, megaSamplesPerSecond);
         fflush(stdout);
     }
 

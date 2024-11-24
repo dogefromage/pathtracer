@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <stdio.h>
 
+#include <cassert>
 #include <cmath>
+#include <ostream>
 
 #include "config.h"
-#include <stdio.h>
-#include <ostream>
-#include <cassert>
 
 #define TEST(x) (x)
 // #define TEST(x) test_finite(x)
@@ -35,24 +35,30 @@ MATH_PLATFORM inline float test_finite(float x) {
     return x;
 }
 
-
 template <typename T>
 struct fixed_array {
     int count;
-    T *items;
+    T* items;
 
     MATH_PLATFORM const T& operator[](size_t k) const {
         assert(k < count);
         return items[k];
     }
-};
 
+    MATH_PLATFORM T& operator[](size_t k) {
+        assert(k < count);
+        return items[k];
+    }
+};
 
 struct Vec3 {
     float x, y, z;
 
-    static Vec3 Zero() {
-        return { 0, 0, 0 };
+    MATH_PLATFORM static Vec3 Zero() {
+        return {0, 0, 0};
+    }
+    MATH_PLATFORM static Vec3 Const(float c) {
+        return {c, c, c};
     }
 
     MATH_PLATFORM Vec3(float x = 0.0f, float y = 0.0f, float z = 0.0f)
@@ -181,7 +187,7 @@ struct Vec3 {
     }
 
     MATH_PLATFORM Vec3 map(float f(float)) const {
-        return { f(x), f(y), f(z) };
+        return {f(x), f(y), f(z)};
     }
 
     MATH_PLATFORM void checkFinite() const {
@@ -211,13 +217,22 @@ inline MATH_PLATFORM void operator/=(Vec3& lhs, float a) {
     lhs = lhs / a;
 }
 
+inline MATH_PLATFORM Vec3 operator+(float a, Vec3 v) {
+    return v + a;
+}
+
+inline MATH_PLATFORM Vec3 operator-(float a, Vec3 v) {
+    return a + (-v);
+}
+
 inline MATH_PLATFORM Vec3 operator*(float a, Vec3 v) {
     return v * a;
 }
 
-inline MATH_PLATFORM Vec3 operator+(float a, Vec3 v) {
-    return v + a;
+inline MATH_PLATFORM Vec3 operator/(float a, Vec3 v) {
+    return Vec3::Const(a) / v;
 }
+
 
 inline std::ostream& operator<<(std::ostream& os, const Vec3& a) {
     char buf[128];
@@ -230,8 +245,8 @@ struct Mat3 {
     float m[3][3];
 
     MATH_PLATFORM Mat3(float m00, float m01, float m02,
-                   float m10, float m11, float m12,
-                   float m20, float m21, float m22) {
+                       float m10, float m11, float m12,
+                       float m20, float m21, float m22) {
         m[0][0] = m00;
         m[0][1] = m01;
         m[0][2] = m02;
@@ -249,9 +264,7 @@ struct Mat3 {
             ADD(ADD(MUL(m[1][0], v.x), MUL(m[1][1], v.y)), MUL(m[1][2], v.z)),
             ADD(ADD(MUL(m[2][0], v.x), MUL(m[2][1], v.y)), MUL(m[2][2], v.z)));
     }
-
 };
-
 
 struct Vec4 {
     float x, y, z, w;
@@ -339,10 +352,14 @@ struct Vec4 {
     // Access components by index (const)
     MATH_PLATFORM float operator[](int k) const {
         switch (k) {
-            case 0: return x;
-            case 1: return y;
-            case 2: return z;
-            case 3: return w;
+            case 0:
+                return x;
+            case 1:
+                return y;
+            case 2:
+                return z;
+            case 3:
+                return w;
         }
         return 0.0;
     }
@@ -350,10 +367,14 @@ struct Vec4 {
     // Access components by index (mutable)
     MATH_PLATFORM float& operator[](int k) {
         switch (k) {
-            case 0: return x;
-            case 1: return y;
-            case 2: return z;
-            case 3: return w;
+            case 0:
+                return x;
+            case 1:
+                return y;
+            case 2:
+                return z;
+            case 3:
+                return w;
         }
         return x;
     }
@@ -428,8 +449,6 @@ inline MATH_PLATFORM Vec4 operator*(float scalar, Vec4 v) {
     return v * scalar;
 }
 
-
-
 struct Mat4 {
     float m[4][4];
 
@@ -438,10 +457,22 @@ struct Mat4 {
                        float m10, float m11, float m12, float m13,
                        float m20, float m21, float m22, float m23,
                        float m30, float m31, float m32, float m33) {
-        m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
-        m[1][0] = m10; m[1][1] = m11; m[1][2] = m12; m[1][3] = m13;
-        m[2][0] = m20; m[2][1] = m21; m[2][2] = m22; m[2][3] = m23;
-        m[3][0] = m30; m[3][1] = m31; m[3][2] = m32; m[3][3] = m33;
+        m[0][0] = m00;
+        m[0][1] = m01;
+        m[0][2] = m02;
+        m[0][3] = m03;
+        m[1][0] = m10;
+        m[1][1] = m11;
+        m[1][2] = m12;
+        m[1][3] = m13;
+        m[2][0] = m20;
+        m[2][1] = m21;
+        m[2][2] = m22;
+        m[2][3] = m23;
+        m[3][0] = m30;
+        m[3][1] = m31;
+        m[3][2] = m32;
+        m[3][3] = m33;
     }
 
     static MATH_PLATFORM Mat4 Identity() {
@@ -449,8 +480,7 @@ struct Mat4 {
             1, 0, 0, 0,
             0, 1, 0, 0,
             0, 0, 1, 0,
-            0, 0, 0, 1
-        );
+            0, 0, 0, 1);
     }
 
     // Matrix-vector multiplication
@@ -464,7 +494,7 @@ struct Mat4 {
 
     // Matrix-matrix multiplication
     MATH_PLATFORM Mat4 operator*(const Mat4& rhs) const {
-        Mat4 result(0, 0, 0, 0,   // Initializing to zeros
+        Mat4 result(0, 0, 0, 0,  // Initializing to zeros
                     0, 0, 0, 0,
                     0, 0, 0, 0,
                     0, 0, 0, 0);
@@ -472,10 +502,10 @@ struct Mat4 {
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < 4; ++j) {
                 result.m[i][j] = ADD(ADD(ADD(
-                    MUL(m[i][0], rhs.m[0][j]),
-                    MUL(m[i][1], rhs.m[1][j])),
-                    MUL(m[i][2], rhs.m[2][j])),
-                    MUL(m[i][3], rhs.m[3][j]));
+                                             MUL(m[i][0], rhs.m[0][j]),
+                                             MUL(m[i][1], rhs.m[1][j])),
+                                         MUL(m[i][2], rhs.m[2][j])),
+                                     MUL(m[i][3], rhs.m[3][j]));
             }
         }
         return result;
@@ -488,27 +518,32 @@ struct Mat4 {
         return Mat3(
             m[0][0], m[0][1], m[0][2],
             m[1][0], m[1][1], m[1][2],
-            m[2][0], m[2][1], m[2][2]
-        );
+            m[2][0], m[2][1], m[2][2]);
     }
 };
 
 struct AABB {
-    Vec3 min, max;
+    Vec3 min = Vec3::Const(1e30);
+    Vec3 max = Vec3::Const(-1e30);
 
-    static MATH_PLATFORM AABB 
-    Empty() {
-        AABB b;
-        b.min.set(1e30);
-        b.max.set(-1e30);
-        return b;
+    MATH_PLATFORM void reset() {
+        min = Vec3::Const(1e30);
+        max = Vec3::Const(-1e30);
     }
 
-    MATH_PLATFORM AABB including(const Vec3& p) const {
-        return {
-            min: Vec3::min(min, p),
-            max: Vec3::max(max, p),
-        };
+    MATH_PLATFORM void grow(const Vec3& p) {
+        min = Vec3::min(min, p);
+        max = Vec3::max(max, p);
+    }
+
+    MATH_PLATFORM void grow(const AABB& other) {
+        min = Vec3::min(min, other.min);
+        max = Vec3::max(max, other.max);
+    }
+
+    MATH_PLATFORM float area() const {
+        Vec3 e = max - min;
+        return e.x * e.y + e.y * e.z + e.z * e.x;
     }
 
     MATH_PLATFORM bool contains(const Vec3& x) const {
@@ -517,8 +552,10 @@ struct AABB {
 
     __host__ void print() {
         printf("[ (%.2f,%.2f,%.2f), (%.2f,%.2f,%.2f) ]\n",
-            min.x, min.y, min.z, max.x, max.y, max.z);
+               min.x, min.y, min.z, max.x, max.y, max.z);
     }
 };
 
-typedef AABB aabb_t;
+struct Ray {
+    Vec3 o, r;
+};

@@ -20,3 +20,16 @@ cudaError_t check_cuda_err(cudaError_t err) {
     }
     return err;
 }
+
+void human_readable_size(char* buf, size_t bytes) {
+    if (bytes < 1'000) {
+        sprintf(buf, "%luB", bytes);
+    } else if (bytes < 1'000'000) {
+        sprintf(buf, "%luKB", bytes / 1'000);
+    } else if (bytes < 1'000'000'000) {
+        sprintf(buf, "%luMB", bytes / 1'000'000);
+    } else {
+        // ???
+        sprintf(buf, "%luGB", bytes / 1'000'000'000);
+    }
+}

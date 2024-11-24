@@ -36,32 +36,17 @@ calculate_face_centroid(const scene_t& scene, const face_t& face) {
     return centroid;
 }
 
-static void aabb_init(aabb_t& aabb) {
-    aabb.min.set(1e30);
-    aabb.max.set(-1e30);
-}
-
-static float aabb_area(const aabb_t& aabb) {
-    Vec3 e = aabb.max - aabb.min;
-    return e.x * e.y + e.y * e.z + e.z * e.x;
-}
-
-static void aabb_grow_point(aabb_t& aabb, const Vec3& p) {
-    aabb.min = Vec3::min(aabb.min, p);
-    aabb.max = Vec3::max(aabb.max, p);
-}
-
-static void aabb_grow_face(const scene_t& scene, aabb_t& aabb, uint32_t faceIndex) {
+static void aabb_grow_face(const scene_t& scene, AABB& aabb, uint32_t faceIndex) {
     const face_t &face = scene.faces[faceIndex];
     for (uint32_t j = 0; j < face.vertexCount; j++) {
         const Vec3& v = scene.vertices[face.vertices[j]].position;
-        aabb_grow_point(aabb, v);
+        aabb.grow(v);
     }
 }
 
 static void update_node_bounds(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex) {
     bvh_node_t& node = bvh.nodes[nodeIndex];
-    aabb_init(node.bounds);
+    node.bounds.reset();
     for (uint32_t i = node.start; i < node.end; i++) {
         aabb_grow_face(scene, node.bounds, bvh.indices[i]);
     }
@@ -73,92 +58,77 @@ void swap(uint32_t* a, uint32_t* b) {
     *b = t;
 }
 
+#define NUM_BINS 16
+
+struct Bin { 
+    AABB bounds; 
+    int primitiveCount = 0; 
+};
+
+// https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
 static float
-evaluate_sah(const scene_t& scene,
-             bvh_t& bvh, bvh_node_t& node, int axis, float splitPos) {
-    // determine triangle counts and bounds for this split candidate
-    aabb_t leftBox, rightBox;
-    aabb_init(leftBox);
-    aabb_init(rightBox);
-    uint32_t leftCount = 0, rightCount = 0;
-    for (uint32_t i = node.start; i < node.end; i++) {
-        float centroid = bvh.centroids[bvh.indices[i]][axis];
-        if (centroid < splitPos) {
-            leftCount++;
-            aabb_grow_face(scene, leftBox, bvh.indices[i]);
-        } else {
-            rightCount++;
-            aabb_grow_face(scene, rightBox, bvh.indices[i]);
-        }
-    }
-
-    float cost = leftCount * aabb_area(leftBox) + rightCount * aabb_area(rightBox);
-    return cost > 0 ? cost : 1e30;
-}
-
-// static float
-// find_split_plane_centroids(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
-//                            int* bestAxis, float* bestSplit) {
-//     float bestCost = 1e30;
-//     for (int a = 0; a < 3; a++) {
-//         for (uint32_t i = node.start; i < node.end; i++) {
-//             float candidate = bvh.centroids[bvh.indices[i]][a];
-//             float cost = evaluate_sah(scene, bvh, node, a, candidate);
-//             if (cost < bestCost) {
-//                 *bestAxis = a;
-//                 *bestSplit = candidate;
-//                 bestCost = cost;
-//             }
-//         }
-//     }
-//     assert(*bestAxis >= 0);
-//     return bestCost;
-// }
-
-static float
-find_best_split_plane_bands(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
-                      int* bestAxis, float* bestSplit, int numBands) {
-
+find_best_split_plane(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
+                      int* bestAxis, float* bestSplit) {
     AABB centroidBounds;
-    aabb_init(centroidBounds);
     for (size_t i = node.start; i < node.end; i++) {
         const Vec3& c = bvh.centroids[bvh.indices[i]];
-        centroidBounds = centroidBounds.including(c);
+        centroidBounds.grow(c);
     }
 
-    float bestCost = 1e30;
+    float bestCost = 1e30f;
+
     for (int a = 0; a < 3; a++) {
         float boundsMin = centroidBounds.min[a];
         float boundsMax = centroidBounds.max[a];
+
         if (std::abs(boundsMin - boundsMax) < std::numeric_limits<float>::epsilon()) {
             continue;
         }
-        float scale = (boundsMax - boundsMin) / numBands;
-        for (int i = 1; i < numBands; i++) {
-            float candidate = boundsMin + i * scale;
-            float cost = evaluate_sah(scene, bvh, node, a, candidate);
-            if (cost < bestCost) {
+
+        Bin bins[NUM_BINS];
+
+        float scale = (boundsMax - boundsMin) / NUM_BINS;
+        float inv_scale = 1 / scale;
+            
+        for (uint32_t i = node.start; i < node.end; i++) {
+            float centroid = bvh.centroids[bvh.indices[i]][a];
+
+            int binIndex = min(NUM_BINS - 1, (int)((centroid - boundsMin) * inv_scale)); 
+            Bin& bin = bins[binIndex];
+            aabb_grow_face(scene, bin.bounds, bvh.indices[i]);
+            bin.primitiveCount++;
+        }
+
+        float leftArea[NUM_BINS - 1], rightArea[NUM_BINS - 1];
+        int leftCount[NUM_BINS - 1], rightCount[NUM_BINS - 1];
+
+        AABB leftBox, rightBox;
+        int leftSum = 0, rightSum = 0;
+        for (int i = 0; i < NUM_BINS - 1; i++) {
+            // left
+            leftSum += bins[i].primitiveCount;
+            leftCount[i] = leftSum;
+            leftBox.grow(bins[i].bounds);
+            leftArea[i] = leftBox.area();
+            // right
+            rightSum += bins[NUM_BINS - 1 - i].primitiveCount;
+            rightCount[NUM_BINS - 2 - i] = rightSum;
+            rightBox.grow(bins[NUM_BINS - 1 - i].bounds);
+            rightArea[NUM_BINS - 2 - i] = rightBox.area();
+        }
+
+        for (int i = 0; i < NUM_BINS - 1; i++) {
+            float planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+            if (planeCost < bestCost) {
                 *bestAxis = a;
-                *bestSplit = candidate;
-                bestCost = cost;
+                *bestSplit = boundsMin + scale * (i + 1);
+                bestCost = planeCost;
             }
         }
     }
     assert(*bestAxis >= 0);
+
     return bestCost;
-}
-
-#define N_BANDS 8
-
-static float
-find_best_split_plane(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
-                      int* bestAxis, float* bestSplit) {
-    // int count = node.end - node.start;
-    // if (count < N_BANDS) {
-    //     return find_split_plane_centroids(scene, bvh, node, bestAxis, bestSplit);
-    // } else {
-    return find_best_split_plane_bands(scene, bvh, node, bestAxis, bestSplit, N_BANDS);
-    // }
 }
 
 static void
@@ -171,8 +141,6 @@ subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& sta
     if (count <= 2) {
         return;  // stop criterion
     }
-    // uint32_t i = split_by_average(bvh, node, count, stats);
-    // uint32_t i = split_by_median(bvh, node, count, stats);
 
     int bestAxis = -1;
     float bestPos = 0;
@@ -190,11 +158,7 @@ subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& sta
     }
 
     int leftCount = i - node.start;
-    if (leftCount == 0 || leftCount == count) {
-        // printf("Skipped split\n");
-        stats.totalSkippedFaces += count;
-        return;
-    }
+    assert(0 < leftCount || leftCount < count);
 
     uint32_t leftIndex = bvh.nodeCount++;
     uint32_t rightIndex = bvh.nodeCount++;
@@ -204,13 +168,11 @@ subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& sta
     left.end = right.start = i;
     right.end = node.end;
 
-    // printf("Split: %u => %u / %u\n", left->start, left->end - left->start, right->end - right->start);
-
     time_t currTime;
     time(&currTime);
     double elapsed_seconds = difftime(currTime, stats.lastInfo);
     if (elapsed_seconds > 1.0) {
-        printf("created %u bvh nodes (of at most %d)\n", bvh.nodeCount, bvh.maxNodeCount);
+        printf("created %u bvh nodes (of at most %d)\n", bvh.nodeCount, bvh.nodes.count);
         stats.lastInfo = currTime;
     }
 
@@ -246,11 +208,11 @@ print_stats(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& s
 
     printf("\nbvh_t stats:\n");
     printf("  node count = %u\n", bvh.nodeCount);
-    printf("  optimal node count = %u\n", bvh.maxNodeCount);
+    printf("  optimal node count = %u\n", bvh.nodes.count);
     printf("  number leafs = %u\n", stats.numberLeaves);
     printf("  skipped faces = %u / %u = %.3f\n",
-           stats.totalSkippedFaces, bvh.primitiveCount,
-           stats.totalSkippedFaces / (float)bvh.primitiveCount);
+           stats.totalSkippedFaces, bvh.indices.count,
+           stats.totalSkippedFaces / (float)bvh.indices.count);
     printf("  average leaf size = %.2f\n", stats.averageLeafSize);
     printf("  max tree height =  %d\n", stats.maxDepth);
 }
@@ -264,32 +226,37 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
     memset(&stats, 0, sizeof(bvh_stats_t));
     time(&stats.lastInfo);
 
-    bvh.primitiveCount = scene.faces.count;
-    bvh.maxNodeCount = 2 * bvh.primitiveCount - 1;
+    uint32_t primitiveCount = scene.faces.count;
+    uint32_t maxNodeCount = 2 * primitiveCount - 1;
+    // bvh.primitiveCount = scene.faces.count;
+    // bvh.maxNodeCount = 2 * bvh.primitiveCount - 1;
 
     bvh.nodeCount = 0;
-    bvh.nodes = (bvh_node_t*)malloc(sizeof(bvh_node_t) * bvh.maxNodeCount);
-    assert(bvh.nodes && "malloc");
+    bvh.nodes.items = (bvh_node_t*)malloc(sizeof(bvh_node_t) * maxNodeCount);
+    assert(bvh.nodes.items && "malloc");
+    bvh.nodes.count = maxNodeCount;
 
     // mutable primitive list for sorting faces
-    bvh.indices = (uint32_t*)malloc(sizeof(uint32_t) * bvh.primitiveCount);
-    assert(bvh.indices && "malloc");
+    bvh.indices.items = (uint32_t*)malloc(sizeof(uint32_t) * primitiveCount);
+    assert(bvh.indices.items && "malloc");
+    bvh.indices.count = primitiveCount;
 
-    for (uint32_t i = 0; i < bvh.primitiveCount; i++) {
+    for (uint32_t i = 0; i < primitiveCount; i++) {
         bvh.indices[i] = i;
     }
     // calculate centroids, accesses work with scene face indices
-    bvh.centroids = (Vec3*)malloc(sizeof(Vec3) * bvh.primitiveCount);
-    assert(bvh.centroids && "malloc");
+    bvh.centroids.items = (Vec3*)malloc(sizeof(Vec3) * primitiveCount);
+    assert(bvh.centroids.items && "malloc");
+    bvh.centroids.count = primitiveCount;
 
-    for (uint32_t i = 0; i < bvh.primitiveCount; i++) {
+    for (uint32_t i = 0; i < primitiveCount; i++) {
         bvh.centroids[i] = calculate_face_centroid(scene, scene.faces[i]);
     }
 
     uint32_t rootIndex = bvh.nodeCount++;
     bvh_node_t& root = bvh.nodes[rootIndex];
     root.start = 0;
-    root.end = bvh.primitiveCount;
+    root.end = primitiveCount;
     update_node_bounds(scene, bvh, rootIndex);
     subdivide(scene, bvh, rootIndex, stats, 1);
 
@@ -297,8 +264,8 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
     print_stats(scene, bvh, rootIndex, stats);
 
     // not needed anymore
-    free(bvh.centroids);
-    bvh.centroids = NULL;
+    free(bvh.centroids.items);
+    bvh.centroids.items = NULL;
 
     if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
         printf("ERROR bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n", 
@@ -310,66 +277,46 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
 }
 
 void bvh_free_host(bvh_t& h_bvh) {
-    free(h_bvh.nodes);
-    h_bvh.nodes = NULL;
-    free(h_bvh.indices);
-    h_bvh.indices = NULL;
+    free(h_bvh.nodes.items);
+    h_bvh.nodes.items = NULL;
+    free(h_bvh.indices.items);
+    h_bvh.indices.items = NULL;
 }
 
 void bvh_copy_device(bvh_t** d_bvh, const bvh_t* h_bvh) {
     printf("Copying bvh_t to device... ");
 
-    bvh_t m_bvh = *h_bvh;
+    bvh_t placeholder = *h_bvh;
 
-    cudaError_t err;
-    size_t curr_bytes, total_bytes;
-    total_bytes = 0;
+    size_t totalSize = 0;
 
-    curr_bytes = sizeof(bvh_node_t) * m_bvh.maxNodeCount;
-    total_bytes += curr_bytes;
-    err = cudaMalloc(&m_bvh.nodes, curr_bytes);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaMemcpy(m_bvh.nodes, h_bvh->nodes,
-                     curr_bytes, cudaMemcpyHostToDevice);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
+    totalSize += copy_device_fixed_array(&placeholder.nodes, &h_bvh->nodes);
+    totalSize += copy_device_fixed_array(&placeholder.indices, &h_bvh->indices);
 
-    curr_bytes = sizeof(uint32_t) * m_bvh.primitiveCount;
-    total_bytes += curr_bytes;
-    err = cudaMalloc(&m_bvh.indices, curr_bytes);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaMemcpy(m_bvh.indices, h_bvh->indices,
-                     curr_bytes, cudaMemcpyHostToDevice);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
+    totalSize += copy_device_struct(d_bvh, &placeholder);
 
-    total_bytes += sizeof(bvh_t);
-    err = cudaMalloc(d_bvh, sizeof(bvh_t));
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaMemcpy(*d_bvh, &m_bvh,
-                     sizeof(bvh_t), cudaMemcpyHostToDevice);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-
-    printf("Done [%ldkB]\n", total_bytes / 1000);
+    char buf[64];
+    human_readable_size(buf, totalSize);
+    printf("Done [%s]\n", buf);
 }
 
 void bvh_free_device(bvh_t* d_bvh) {
-    cudaError_t err;
-    bvh_t m_bvh;
-    err = cudaMemcpy(&m_bvh, d_bvh, sizeof(bvh_t), cudaMemcpyDeviceToHost);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaFree(d_bvh);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaFree(m_bvh.nodes);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
-    err = cudaFree(m_bvh.indices);
-    if (check_cuda_err(err)) exit(EXIT_FAILURE);
+    
+    bvh_t placeholder;
+    copy_host_struct(&placeholder, d_bvh);
+
+    device_free(placeholder.nodes.items);
+    device_free(placeholder.indices.items);
+
+    device_free(d_bvh);
 }
 
 #define RAY_NO_HIT 1e30f
 
 static PLATFORM float
-intersect_aabb(const aabb_t& aabb, const Ray& ray, float min_t) {
-    Vec3 t1 = (aabb.min - ray.o) / ray.r;
-    Vec3 t2 = (aabb.max - ray.o) / ray.r;
+intersect_aabb(const AABB& aabb, const Ray& ray, const Vec3& r_inv, float min_t) {
+    Vec3 t1 = (aabb.min - ray.o) * r_inv;
+    Vec3 t2 = (aabb.max - ray.o) * r_inv;
     Vec3 tminv = Vec3::min(t1, t2);
     Vec3 tmaxv = Vec3::max(t1, t2);
 
@@ -384,30 +331,14 @@ intersect_aabb(const aabb_t& aabb, const Ray& ray, float min_t) {
 }
 
 PLATFORM void
-bvh_intersect(const __restrict__ bvh_t* bvh, uint32_t nodeIndex,
-              const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit) {
-    bvh_node_t &node = bvh->nodes[nodeIndex];
-    if (!intersect_aabb(node.bounds, ray, hit.distance)) {
-        return;
-    }
-    if (node.end - node.start > 0) {
-        // is leaf
-        for (uint32_t i = node.start; i < node.end; i++) {
-            intersect_face(scene, ray, hit, bvh->indices[i]);
-        }
-    } else {
-        bvh_intersect(bvh, node.leftChild, scene, ray, hit);
-        bvh_intersect(bvh, node.rightChild, scene, ray, hit);
-    }
-}
-
-PLATFORM void
 bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
                         const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit) {
 
+    Vec3 r_inv = 1.0 / ray.r;
+
     bvh_node_t* stack[BVH_TRAVERSAL_STACK_SIZE];
     int depth = 0;
-    stack[0] = &bvh->nodes[0];
+    stack[0] = &bvh->nodes.items[0];
 
     while (depth >= 0) {
         bvh_node_t* node = stack[depth--];
@@ -422,11 +353,11 @@ bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
                 node = NULL;
             } else {
 
-                bvh_node_t* child1 = &bvh->nodes[node->leftChild];
-                bvh_node_t* child2 = &bvh->nodes[node->rightChild];
+                bvh_node_t* child1 = &bvh->nodes.items[node->leftChild];
+                bvh_node_t* child2 = &bvh->nodes.items[node->rightChild];
 
-                float t1 = intersect_aabb(child1->bounds, ray, hit.distance);
-                float t2 = intersect_aabb(child2->bounds, ray, hit.distance);
+                float t1 = intersect_aabb(child1->bounds, ray, r_inv, hit.distance);
+                float t2 = intersect_aabb(child2->bounds, ray, r_inv, hit.distance);
 
                 if (t2 < t1) {
                     bvh_node_t* tempc = child1;
@@ -442,7 +373,9 @@ bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
                 } else {
                     node = child1;
                     if (t2 != RAY_NO_HIT) {
-                        stack[++depth] = child2;
+                        depth++;
+                        assert(depth < BVH_TRAVERSAL_STACK_SIZE);
+                        stack[depth] = child2;
                     }
                 }
             }

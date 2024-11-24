@@ -6,11 +6,11 @@
 
 typedef struct {
     struct {
-        int width = 600, height = 600;
+        int width, height;
     } output;
 
     struct {
-        int seed = 42, samples = 100, samples_per_round = 10;
+        int seed, samples, samples_per_round;
     } sampling;
 
     struct {
@@ -21,4 +21,4 @@ typedef struct {
 
 void settings_parse_yaml(settings_t& settings, const std::string& filename);
 
-void settings_print(const settings_t& settings);
+void settings_print(settings_t& settings);

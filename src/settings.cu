@@ -20,21 +20,17 @@ enum class ParserMode {
 };
 
 struct YamlParser {
-    ParserMode mode;
-
-    settings_t printSettings; // for printing
-    std::string lastSection;
+    settings_t& settings;
 
     std::vector<ParseRule<int>> intRules;
     std::vector<ParseRule<float>> floatRules;
     std::vector<ParseRule<bool>> boolRules;
     std::vector<ParseRule<Vec3>> vec3Rules;
 
+    ParserMode mode;
+    std::string lastSection;
 
-    void setPrinting(const settings_t& settings) {
-        mode = ParserMode::Print;
-        printSettings = settings;
-    }
+    YamlParser(settings_t& _settings) : settings(_settings) {}
 
     void printSection(const std::string& section) {
         if (section != lastSection) {
@@ -45,41 +41,45 @@ struct YamlParser {
 
     void addInt(ParseRule<int>&& r) {
         if (mode == ParserMode::Parse) {
+            *r.selector(settings) = r.defaultValue;
             intRules.push_back(r);
         }
         if (mode == ParserMode::Print) {
             printSection(r.section);
-            std::cout << "  " << r.key << ": " << *r.selector(printSettings) << std::endl;
+            std::cout << "  " << r.key << ": " << *r.selector(settings) << std::endl;
         }
     }
 
     void addFloat(ParseRule<float>&& r) {
         if (mode == ParserMode::Parse) {
+            *r.selector(settings) = r.defaultValue;
             floatRules.push_back(r);
         }
         if (mode == ParserMode::Print) {
             printSection(r.section);
-            std::cout << "  " << r.key << ": " << *r.selector(printSettings) << std::endl;
+            std::cout << "  " << r.key << ": " << *r.selector(settings) << std::endl;
         }
     }
 
     void addBool(ParseRule<bool>&& r) {
         if (mode == ParserMode::Parse) {
+            *r.selector(settings) = r.defaultValue;
             boolRules.push_back(r);
         }
         if (mode == ParserMode::Print) {
             printSection(r.section);
-            std::cout << "  " << r.key << ": " << *r.selector(printSettings) << std::endl;
+            std::cout << "  " << r.key << ": " << *r.selector(settings) << std::endl;
         }
     }
 
     void addVec3(ParseRule<Vec3>&& r) {
         if (mode == ParserMode::Parse) {
+            *r.selector(settings) = r.defaultValue;
             vec3Rules.push_back(r);
         }
         if (mode == ParserMode::Print) {
             printSection(r.section);
-            std::cout << "  " << r.key << ": " << *r.selector(printSettings) << std::endl;
+            std::cout << "  " << r.key << ": " << *r.selector(settings) << std::endl;
         }
     }
 
@@ -157,7 +157,9 @@ struct YamlParser {
     }
 };
 
-static void create_parser(YamlParser& parser) {
+static void create_parser(YamlParser& parser, ParserMode mode) {
+    parser.mode = mode;
+
     parser.addInt({ "output", "width", "Width of output image", 
         [](settings_t& s) { return &s.output.width; }, 600 });
     parser.addInt({ "output", "height", "Height of output image", 
@@ -168,28 +170,26 @@ static void create_parser(YamlParser& parser) {
     parser.addInt({ "sampling", "samples", "Number of samples per pixel", 
         [](settings_t& s) { return &s.sampling.samples; }, 100 });
     parser.addInt({ "sampling", "samples_per_round", "Send image to screen every n samples", 
-        [](settings_t& s) { return &s.sampling.samples_per_round; }, 10 });
+        [](settings_t& s) { return &s.sampling.samples_per_round; }, 10000 });
 
     parser.addVec3({ "world", "clear_color", "Color of skybox", 
         [](settings_t& s) { return &s.world.clear_color; }, Vec3::Zero() });
 }
 
 void settings_parse_yaml(settings_t& settings, const std::string& filename) {
-    YamlParser parser;
-    parser.mode = ParserMode::Parse;
-    create_parser(parser);
+    YamlParser parser(settings);
+    create_parser(parser, ParserMode::Parse);
     parser.parse(settings, filename);
 }
 
-void settings_print(const settings_t& settings) {
+void settings_print(settings_t& settings) {
 
-    YamlParser printingParser;
-    printingParser.setPrinting(settings);
+    YamlParser printingParser(settings);
 
     printf("----------------------------------------\n");
     std::cout << "Settings:\n";
     
-    create_parser(printingParser); // prints settings
+    create_parser(printingParser, ParserMode::Print); // prints settings
 
     printf("----------------------------------------\n");
 }

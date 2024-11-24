@@ -43,8 +43,7 @@ get_camera_ray(Ray& ray, const __restrict__ scene_t* scene,
     Vec3 x = {u, v, 1};
 
     ray.o = P;
-    ray.r = A * x;
-    ray.r.normalize();
+    ray.r = (A * x).normalized();
 }
 
 // offset new ray slightly from triangle in normal dir
@@ -53,6 +52,7 @@ get_camera_ray(Ray& ray, const __restrict__ scene_t* scene,
 static PLATFORM void
 initialize_safe_ray(Ray& ray, const Vec3& origin, const Vec3& dir, const Vec3& normal) {
     bool transmit = dir.dot(normal) < 0;
+    
     ray.o = origin + SAVE_RAY_EPS * (transmit ? -normal : normal);
     ray.r = dir;
 }
@@ -171,7 +171,7 @@ render_kernel(Vec3* img,
               const __restrict__ bvh_t* bvh,
               const __restrict__ scene_t* scene,
               const __restrict__ lst_t* lst,
-              settings_t settings, int previous_samples) {
+              settings_t settings, int previousSamples, int currentSamples) {
                 
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -187,7 +187,7 @@ render_kernel(Vec3* img,
 
     Vec3 total_light = {0, 0, 0};
 
-    for (int i = 0; i < settings.sampling.samples_per_round; i++) {
+    for (int i = 0; i < currentSamples; i++) {
         float sensor_variance = 0.33;
         float sensor_x = (float)pixel_x + sensor_variance * random_normal(rstate);
         float sensor_y = (float)pixel_y + sensor_variance * random_normal(rstate);
@@ -202,13 +202,13 @@ render_kernel(Vec3* img,
         total_light += current_light;
     }
 
-    total_light /= (float)settings.sampling.samples_per_round;
+    total_light /= (float)currentSamples;
 
-    int total_samples = settings.sampling.samples_per_round + previous_samples;
+    int total_samples = previousSamples + currentSamples;
     Vec3 last_pixel = img[pixel_y * settings.output.width + pixel_x];
 
-    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) +
-                      total_light * (settings.sampling.samples_per_round / (float)total_samples);
+    Vec3 next_pixel = last_pixel * (previousSamples / (float)total_samples)
+                    + total_light * (currentSamples / (float)total_samples);
 
     img[pixel_y * settings.output.width + pixel_x] = next_pixel;
 }

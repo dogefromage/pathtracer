@@ -6,7 +6,7 @@ output:
 sampling:
   seed: 42
   samples: 300
-  samples_per_round: 10
+  samples_per_round: 50
 
 world:
-  clear_color: 0.509 0.607 0.768
+  # clear_color: 0.509 0.607 0.768
