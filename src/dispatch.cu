@@ -113,7 +113,7 @@ void render_image_device(scene_t* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_i
 
         float samplesPerPixelSecond = renderedSamples / elapsedTime;
 
-        printf("Rendered %d out of %d S/px in %.1fs - %.2f S/px*s - %.2f MS/s\n",
+        printf("Rendered %d out of %d S/px in %.1fs - %.2f S/px/s - %.2f MS/s\n",
                renderedSamples, settings.sampling.samples, elapsedTime, samplesPerPixelSecond, megaSamplesPerSecond);
         fflush(stdout);
     }

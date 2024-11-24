@@ -12,9 +12,11 @@
 bool doVerbosePrinting = false;
 
 void print_help(int argc, char* argv[]) {
-    fprintf(stderr, "Usage: %s [options] <path_to_obj>\n", argv[0]);
-    fprintf(stderr, "Expects an .obj file with right handed coordinate system.\n");
+    fprintf(stderr, "Usage: %s [options] <path_to_gltf>\n", argv[0]);
+    fprintf(stderr, "Expects a gltf 2.0 model. Further settings can be applied in pathtracer.yaml.\n");
     fprintf(stderr, "  -c <pathtracer.yaml>  Pathtracer render settings file.\n");
+    fprintf(stderr, "  -o <output.png>       Path to output image.\n");
+    fprintf(stderr, "  -v                    Enable verbose printing.\n");
 }
 
 int main(int argc, char* argv[]) {

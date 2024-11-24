@@ -5,20 +5,22 @@ Started out as a small project over the break and has spiraled out of control ov
 Usage:
 - Build the program using ```make``` (requires cuda compiler)
 - The output will be placed in the ```./bin``` folder
-- Test by writing ```./bin/raytracer -c pathtracer.yaml assets/spheres.obj ```
-- The output will be rendered to ```./render.bmp```
+- Test by writing ```./bin/raytracer -c pathtracer.yaml gltf/bust.gltf ```
+- The output will be rendered to ```./output.png```
 
 ```sh
 # usage:
-Usage: ./bin/raytracer [options] <path_to_obj>
-Expects an .obj file with right handed coordinate system.
+Usage: ./bin/raytracer [options] <path_to_gltf>
+Expects a gltf 2.0 model. Further settings can be applied in pathtracer.yaml.
   -c <pathtracer.yaml>  Pathtracer render settings file.
+  -o <output.png>       Path to output image.
+  -v                    Enable verbose printing.
 
 # pathtracer.yaml layout:
 TODO
 
 # example output:
-Parsing assets/spheres.obj... Done 
+Parsing assets/spheres.gltf... Done 
 Building bvh_t... [Done]
 Copying scene to device... Done [105kB]
 Copying bvh_t to device... Done [86kB]
@@ -55,4 +57,3 @@ Rendered 80 / 300 samples in 1.2s - 64.99 samples/s - 23.40 MPS/s
 * [How to build a BVH](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 * [Rendering an image, using C](https://stackoverflow.com/questions/27613601/rendering-an-image-using-c)
 * [Möller Trumbore Ray Triangle Intersection Explained](https://www.youtube.com/watch?v=fK1RPmF_zjQ)
-* [Wavefront .obj file](https://en.wikipedia.org/wiki/Wavefront_.obj_file)
