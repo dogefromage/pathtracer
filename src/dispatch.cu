@@ -12,7 +12,7 @@
 #ifdef USE_CPU_RENDER
 
 int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
-                      size_t img_size, render_settings_t settings) {
+                      size_t img_size, render_settings_t settings, char* output_path) {
     printf("Launching host render... \n");
     printf("Rendering %d samples in batches of %d, img size (%d, %d)\n",
            settings.samples, settings.samples_per_round, settings.width, settings.height);
@@ -50,29 +50,23 @@ int render_image_host(obj_scene_data* h_scene, bvh_t* h_bvh, Vec3* h_img,
 
 #else
 
-int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_img,
-                        size_t img_size, settings_t settings) {
-    obj_scene_data* d_scene;
-    if (scene_copy_to_device(&d_scene, h_scene)) {
-        return 1;
-    }
+void render_image_device(scene_t* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec3* h_img,
+                        size_t img_size, settings_t settings, char* output_path) {
+    scene_t* d_scene;
+    scene_copy_to_device(&d_scene, h_scene);
 
     bvh_t* d_bvh;
-    if (bvh_copy_device(&d_bvh, h_bvh)) {
-        return 1;
-    }
+    bvh_copy_device(&d_bvh, h_bvh);
 
     lst_t* d_lst;
-    if (lst_copy_device(&d_lst, h_lst)) {
-        return 1;
-    }
+    lst_copy_device(&d_lst, h_lst);
 
     cudaError_t err;
 
     Vec3* d_img;
     err = cudaMalloc(&d_img, img_size);
     if (check_cuda_err(err)) {
-        return 1;
+        exit(EXIT_FAILURE);
     }
 
     dim3 threads_per_block(16, 16);  // #threads must be factor of 32 and <= 1024
@@ -94,14 +88,13 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec
         render_kernel<<<num_blocks, threads_per_block>>>(d_img, d_bvh, d_scene, d_lst,
                                                          settings, s);
         err = cudaDeviceSynchronize();
-        if (check_cuda_err(err)) return 1;
+        if (check_cuda_err(err)) {
+            exit(EXIT_FAILURE);
+        }
 
         cudaMemcpy(h_img, d_img, img_size, cudaMemcpyDeviceToHost);
 
-        char filename[500];
-        sprintf(filename, "render.bmp");
-        // sprintf(filename, "render_%.4d.bmp", previous_samples);
-        write_bmp(h_img, settings.output.width, settings.output.height, filename);
+        write_image(h_img, settings.output.width, settings.output.height, output_path);
 
         auto endTime = std::chrono::system_clock::now();
         int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>
@@ -119,13 +112,13 @@ int render_image_device(obj_scene_data* h_scene, bvh_t* h_bvh, lst_t* h_lst, Vec
     }
 
     err = cudaFree(d_img);
-    if (check_cuda_err(err)) return 1;
+    if (check_cuda_err(err)) {
+        exit(EXIT_FAILURE);
+    }
 
-    if (free_device_scene(d_scene)) return 1;
-    if (bvh_free_device(d_bvh)) return 1;
-    if (lst_free_device(d_lst)) return 1;
-
-    return 0;
+    free_device_scene(d_scene);
+    bvh_free_device(d_bvh);
+    lst_free_device(d_lst);
 }
 
 #endif

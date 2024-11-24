@@ -28,6 +28,7 @@ struct YamlParser {
     std::vector<ParseRule<int>> intRules;
     std::vector<ParseRule<float>> floatRules;
     std::vector<ParseRule<bool>> boolRules;
+    std::vector<ParseRule<Vec3>> vec3Rules;
 
 
     void setPrinting(const settings_t& settings) {
@@ -72,6 +73,16 @@ struct YamlParser {
         }
     }
 
+    void addVec3(ParseRule<Vec3>&& r) {
+        if (mode == ParserMode::Parse) {
+            vec3Rules.push_back(r);
+        }
+        if (mode == ParserMode::Print) {
+            printSection(r.section);
+            std::cout << "  " << r.key << ": " << *r.selector(printSettings) << std::endl;
+        }
+    }
+
     void process_rule(settings_t& settings, const std::string& section, const std::string& key, const std::string& value) {
 
         for (const auto& r : intRules) {
@@ -92,7 +103,17 @@ struct YamlParser {
                 return;
             }
         }
-
+        for (const auto& r : vec3Rules) {
+            if (r.section == section && r.key == key) {
+                Vec3* v = r.selector(settings);
+                if (sscanf(value.c_str(), "%f %f %f", &v->x, &v->y, &v->z) < 3) {
+                    printf("Yaml parsing error, expected 3 floats in key value pair: %s, %s\n", 
+                        key.c_str(), value.c_str());
+                    exit(EXIT_FAILURE);
+                }
+                return;
+            }
+        }
         std::cerr << ("Unknown setting in yaml file \"" + (section + "." + key) + "\"") << std::endl;
     }
 
@@ -149,10 +170,8 @@ static void create_parser(YamlParser& parser) {
     parser.addInt({ "sampling", "samples_per_round", "Send image to screen every n samples", 
         [](settings_t& s) { return &s.sampling.samples_per_round; }, 10 });
 
-    parser.addFloat({ "camera", "focal_length", "Focal length of camera", 
-        [](settings_t& s) { return &s.camera.focal_length; }, 0.4 });
-    parser.addFloat({ "camera", "sensor_height", "Height of the camera sensor", 
-        [](settings_t& s) { return &s.camera.sensor_height; }, 0.2 });
+    parser.addVec3({ "world", "clear_color", "Color of skybox", 
+        [](settings_t& s) { return &s.world.clear_color; }, Vec3::Zero() });
 }
 
 void settings_parse_yaml(settings_t& settings, const std::string& filename) {

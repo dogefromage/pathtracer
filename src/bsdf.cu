@@ -23,24 +23,24 @@ world_of_local_dir(const Vec3& normal, const Vec3& v) {
     return x * v.x + y * v.y + z * v.z;
 }
 
-static PLATFORM Vec3
-sphere_sample_uniform(rand_state_t& rstate) {
-    Vec3 r;
-    do {
-        r.x = 2 * random_uniform(rstate) - 1;
-        r.y = 2 * random_uniform(rstate) - 1;
-        r.z = 2 * random_uniform(rstate) - 1;
-    } while (r.dot(r) > 1);
+// static PLATFORM Vec3
+// sphere_sample_uniform(rand_state_t& rstate) {
+//     Vec3 r;
+//     do {
+//         r.x = 2 * random_uniform(rstate) - 1;
+//         r.y = 2 * random_uniform(rstate) - 1;
+//         r.z = 2 * random_uniform(rstate) - 1;
+//     } while (r.dot(r) > 1);
     
-    return r.normalized();
-}
+//     return r.normalized();
+// }
 
-static PLATFORM Vec3
-hemi_sample_uniform(const Vec3& normal_unit, rand_state_t& rstate) {
-    Vec3 r = sphere_sample_uniform(rstate);
-    r.z = std::abs(r.z);
-    return world_of_local_dir(normal_unit, r);
-}
+// static PLATFORM Vec3
+// hemi_sample_uniform(const Vec3& normal_unit, rand_state_t& rstate) {
+//     Vec3 r = sphere_sample_uniform(rstate);
+//     r.z = std::abs(r.z);
+//     return world_of_local_dir(normal_unit, r);
+// }
 
 static PLATFORM sample_t
 hemi_sample_cosine(const Vec3 normal_unit, rand_state_t& rstate) {
@@ -52,7 +52,7 @@ hemi_sample_cosine(const Vec3 normal_unit, rand_state_t& rstate) {
         x = 2 * random_uniform(rstate) - 1;
         y = 2 * random_uniform(rstate) - 1;
         d = x * x + y * y;
-    } while (d > 1);
+    } while (d >= 1);
 
     float z = SQRT(1 - d);
     Vec3 local = Vec3(x, y, z);
@@ -106,25 +106,25 @@ refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
 
 static PLATFORM void 
 sample_bsdf_mirror(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
-    out.omega_i = reflect(hit.normal, v_inv);
+    out.omega_i = reflect(hit.lightingNormal, v_inv);
     out.prob_i = 1.0;
-    float cos_theta = out.omega_i.dot(hit.normal);
+    float cos_theta = out.omega_i.dot(hit.lightingNormal);
     out.bsdf.set(1.0 / cos_theta);
 }
 
 static PLATFORM void 
 sample_bsdf_glass(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
-    bool isBackface = v_inv.dot(hit.normal) > 0;
+    bool isBackface = v_inv.dot(hit.trueNormal) > 0;
 
     float n1 = 1.0;
-    float n2 = hit.mat->refract_index;
+    float n2 = hit.mat->ior;
     if (isBackface) {
         float temp = n1;
         n1 = n2;
         n2 = temp;
     }
 
-    float R = fresnel_reflect_amount(n1, n2, hit.normal, v_inv);
+    float R = fresnel_reflect_amount(n1, n2, hit.lightingNormal, v_inv);
 
     bool isReflecting = random_uniform(rstate) < R;
     if (isReflecting) {
@@ -136,9 +136,9 @@ sample_bsdf_glass(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, ran
 
     } else {
         // REFRACTION
-        out.omega_i = refract(n1, n2, hit.normal, v_inv);
+        out.omega_i = refract(n1, n2, hit.lightingNormal, v_inv);
         out.prob_i = 1 - R;
-        float cos_theta = -out.omega_i.dot(hit.normal);
+        float cos_theta = std::abs(out.omega_i.dot(hit.lightingNormal));
         out.bsdf.set((1 - R) / cos_theta);
     }
 }
@@ -146,26 +146,29 @@ sample_bsdf_glass(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, ran
 PLATFORM void 
 sample_bsdf(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
 
-    bool isGlass = hit.mat->dissolve <= 0.01;
+    bool isGlass = false;
+    // bool isGlass = hit.mat->diffuse <= 0.01;
     if (isGlass) {
         sample_bsdf_glass(out, v_inv, hit, rstate);
         return;
     }
 
-    bool isMirror = hit.mat->spec.maxComponent() >= 0.99;
+    bool isMirror = false;
+    // bool isMirror = hit.mat->spec.maxComponent() >= 0.99;
     if (isMirror) {
         sample_bsdf_mirror(out, v_inv, hit, rstate);
         return;
     }
 
     // diffuse
-    sample_t sample = hemi_sample_cosine(hit.normal, rstate);
+    out.bsdf = hit.mat->color / M_PIf;
+    sample_t sample = hemi_sample_cosine(hit.lightingNormal, rstate);
     out.omega_i = sample.v;
     out.prob_i = sample.p;
 
+    // UNIFORM
     // out.omega_i = hemi_sample_uniform(hit.normal, rstate);
     // out.prob_i = 1 / (2 * M_PIf);  /* probability of chosen direction */
 
-    out.bsdf = hit.mat->diff / M_PIf;
     return;
 }

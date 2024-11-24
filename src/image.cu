@@ -1,61 +1,105 @@
 #include <stdio.h>
 
-#include "image.h"
 #include <cstdint>
 
-uint8_t clamp_channel(float c) {
+#include "image.h"
+
+#define STBI_ONLY_PNG
+#include "stb_image_write.h"
+
+uint8_t clamp_256(float c) {
     if (c < 0.0) c = 0.0;
-    if (c > 1.0) c = 1.0;
+    if (c >= 1.0) c = 1.0;
     return (uint8_t)(255 * c);
 }
 
-Vec3 linear_to_gamma(Vec3 c) {
-    return Vec3(
-        sqrtf(c.x),
-        sqrtf(c.y),
-        sqrtf(c.z)
-    );
+// https://64.github.io/tonemapping/
+float luminance(Vec3 v) {
+    return v.dot(Vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
-Vec3 color_correct(Vec3 c) {
-    return linear_to_gamma(c);
+Vec3 change_luminance(Vec3 c_in, float l_out) {
+    float l_in = luminance(c_in);
+    return c_in * (l_out / l_in);
 }
 
-void write_bmp(Vec3* pixels, int width, int height, const char* filename) {
-    unsigned int header[14];
-    int i, j;
-    FILE* fp = fopen(filename, "wb");
-    uint8_t pad[3] = {0, 0, 0};
+Vec3 reinhard_extended_luminance(Vec3 v, float max_white_l) {
+    float l_old = luminance(v);
+    float numerator = l_old * (1.0f + (l_old / (max_white_l * max_white_l)));
+    float l_new = numerator / (1.0f + l_old);
+    return change_luminance(v, l_new);
+}
 
-    header[0] = 0x4d420000;
-    header[1] = 54 + 3 * height * width;
-    header[2] = 0;
-    header[3] = 54;
-    header[4] = 40;
-    header[5] = width;
-    header[6] = height;
-    header[7] = 0x00180001;
-    header[8] = 0;
-    header[9] = 3 * width * height;
-    header[10] = header[11] = header[12] = header[13] = 0;
+Vec3 reinhard_simple(Vec3 c) {
+    return c / (1 + c);
+}
 
-    fwrite((uint8_t*)header + 2, 1, 54, fp);
-    fflush(fp);
+float linear_to_srgb_gamma(float c) {
+    // source: GPT
+    if (c <= 0.0031308) {
+        return 12.92 * c;
+    } else {
+        return 1.055 * powf(c, 1 / 2.4) - 0.055;
+    }
+}
 
-    for (i = 0; i < height; i++) {
-        for (j = 0; j < width; j++) {
-            int pixel = i * width + j;
-            Vec3 c = pixels[pixel];
-            Vec3 c_corr = color_correct(c);
-            uint8_t R = clamp_channel(c_corr.x);
-            uint8_t G = clamp_channel(c_corr.y);
-            uint8_t B = clamp_channel(c_corr.z);
-            fwrite(&B, 1, 1, fp);
-            fwrite(&G, 1, 1, fp);
-            fwrite(&R, 1, 1, fp);
+const char* get_file_extension(const char* path) {
+    const char* dot = strrchr(path, '.');
+    if (!dot || dot == path) {
+        return NULL;
+    }
+    return dot + 1;
+}
+
+void check_sanity(Vec3 v, int x, int y) {
+    if (!isfinite(v.x)) {
+        printf("WARNING: pixel.x = %f is not finite at (%d,%d)\n", v.x, x, y);
+    }
+    if (!isfinite(v.y)) {
+        printf("WARNING: pixel.y = %f is not finite at (%d,%d)\n", v.y, x, y);
+    }
+    if (!isfinite(v.z)) {
+        printf("WARNING: pixel.z = %f is not finite at (%d,%d)\n", v.z, x, y);
+    }
+}
+
+void write_image(Vec3* linearpixels, int width, int height, const char* filename) {
+    uint8_t* buf = (uint8_t*)malloc(width * height * 3 * sizeof(uint8_t));
+    assert(buf && "malloc");
+    // apply tonemapping, hdr, etc...
+
+    float whitePointLuminance = luminance({ 1, 1, 1 });
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const Vec3& c = linearpixels[y * width + x];
+            check_sanity(c, x, y);
+            whitePointLuminance = fmaxf(whitePointLuminance, luminance(c));
         }
-        fwrite(pad, width % 4, 1, fp);
     }
 
-    fclose(fp);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            Vec3 c = linearpixels[y * width + x];
+
+            c = reinhard_extended_luminance(c, whitePointLuminance);
+            c = c.map(linear_to_srgb_gamma);
+
+            int i = (height - 1 - y) * width + x;
+            buf[3 * i + 0] = clamp_256(c.x);
+            buf[3 * i + 1] = clamp_256(c.y);
+            buf[3 * i + 2] = clamp_256(c.z);
+        }
+    }
+
+    const char* extension = get_file_extension(filename);
+
+    if (!strcmp(extension, "png")) {
+        stbi_write_png(filename, width, height, 3, (void*)buf, 3 * width);
+    } else {
+        printf("Unsupported output image type: %s\n", extension);
+    }
+
+    free(buf);
+    buf = NULL;
 }

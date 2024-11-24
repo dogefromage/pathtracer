@@ -21,11 +21,21 @@ int main(int argc, char* argv[]) {
     
     settings_t settings;
 
+    char output_path[PATH_MAX];
+    strcpy(output_path, "output.png");
+
     int opt;
-    while ((opt = getopt(argc, argv, "c:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:c:v")) != -1) {
         switch (opt) {
+            case 'o':
+                strcpy(output_path, optarg);
+                break;
             case 'c':
                 settings_parse_yaml(settings, optarg);
+                break;
+            case 'v':
+                doVerbosePrinting = true;
+                printf("Verbose printing enabled\n");
                 break;
             default:
                 print_help(argc, argv);
@@ -38,14 +48,13 @@ int main(int argc, char* argv[]) {
         print_help(argc, argv);
         exit(EXIT_FAILURE);
     }
-    char* obj_file = argv[optind];
 
     settings_print(settings);
 
-    obj_scene_data h_scene;
-    if (parse_obj_scene(&h_scene, obj_file)) {
-        exit(EXIT_FAILURE);
-    }
+    char* obj_file_path = argv[optind];
+
+    scene_t h_scene;
+    scene_parse_gltf(h_scene, obj_file_path);
 
     // bounding volume hierarchy
     bvh_t h_bvh;
@@ -61,20 +70,16 @@ int main(int argc, char* argv[]) {
     assert(h_img);
 
 #ifdef USE_CPU_RENDER
-    if (render_image_host(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings)) {
-        exit(EXIT_FAILURE);
-    }
+    render_image_host(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings, output_path);
 #else
-    if (render_image_device(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings)) {
-        exit(EXIT_FAILURE);
-    }
+    render_image_device(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings, output_path);
 #endif
 
     free(h_img);
     h_img = NULL;
-    delete_obj_data(&h_scene);
     bvh_free_host(h_bvh);
     lst_free_host(h_lst);
+    scene_delete_host(h_scene);
 
     return 0;
 }

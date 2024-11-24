@@ -13,19 +13,23 @@
 #include "scene.h"
 
 static PLATFORM void
-get_camera_ray(Ray& ray, const __restrict__ obj_scene_data* scene,
+get_camera_ray(Ray& ray, const __restrict__ scene_t* scene,
                float u, float v, const settings_t& settings) {
-    Vec3 P = scene->vertex_list[scene->camera.position];
-    Vec3 T = scene->vertex_list[scene->camera.target];
-    Vec3 Up = scene->vertex_normal_list[scene->camera.updir];
+
+    const Vec3& P = scene->camera.position;
+    const Vec3& T = scene->camera.target;
+    const Vec3& Up = scene->camera.updir;
 
     Vec3 W = T - P;
     Vec3 U = W.cross(Up);
     Vec3 V = U.cross(W);
 
-    U = U.normalized() * 0.5 * settings.camera.sensor_height;
-    V = V.normalized() * 0.5 * settings.camera.sensor_height;
-    W = W.normalized() * settings.camera.focal_length;
+    float focal_length = 0.1; // doesn't really matter at this point
+    float yheight = atanf(0.5 * scene->camera.yfov) * focal_length;
+
+    U = U.normalized() * yheight;
+    V = V.normalized() * yheight;
+    W = W.normalized() * focal_length;
 
     // U, V, W build orthogonal basis for camera ray direction
     // D = u*U + v*V + 1*W
@@ -54,39 +58,16 @@ initialize_safe_ray(Ray& ray, const Vec3& origin, const Vec3& dir, const Vec3& n
 }
 
 static PLATFORM void
-intersect(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+intersect(const __restrict__ bvh_t* bvh, const __restrict__ scene_t* scene,
           const Ray& ray, intersection_t& hit) {
-    // intersectionCalls++;
     hit.has_hit = 0;
     hit.distance = CLEAR_DISTANCE;
 #ifdef USE_INTERSECT_CRUDE
     intersect_crude(scene, ray, hit);
 #else
     bvh_intersect_iterative(bvh, scene, ray, hit);
-    // bvh_intersect(bvh, BVH_ROOT_NODE, scene, ray, hit);
 #endif
 }
-
-// static PLATFORM Vec3 L_skybox(const __restrict__ bvh_t* bvh,
-//                               const __restrict__ obj_scene_data* scene,
-//                               const __restrict__ lst_t* lst,
-//                               Ray ray, rand_state_t& rstate, settings_t& settings) {
-//     auto& sun = settings.world.sun;
-//     float light_angle = acosf(ray.r.dot(sun.direction));
-
-//     float a1 = 0.5 * sun.angular_diameter;
-//     float a2 = a1 + sun.penumbra;
-
-//     float light_amt = 0;
-
-//     if (light_angle < a1) {
-//         light_amt = 1;
-//     } else if (light_angle < a2) {
-//         light_amt = 1 - (light_angle - a1) / (a2 - a1);
-//     }
-
-//     return light_amt * sun.light + (1.0 - light_amt) * settings.world.clear_light;
-// }
 
 // static PLATFORM Vec3
 // integrate_Ld(const __restrict__ bvh_t* bvh,
@@ -95,7 +76,7 @@ intersect(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scen
 //              Ray ray, rand_state_t& rstate, settings_t& settings) {
 //     light_sample_t ls;
 //     lst_sample(ls, lst, scene);
-    
+
 //     // calculate visibility
 
 //     // find light blabla...
@@ -107,7 +88,7 @@ intersect(const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scen
 
 static PLATFORM Vec3
 integrate_Li_iterative(const __restrict__ bvh_t* bvh,
-                       const __restrict__ obj_scene_data* scene,
+                       const __restrict__ scene_t* scene,
                        const __restrict__ lst_t* lst,
                        Ray ray, rand_state_t& rstate, settings_t& settings) {
     Vec3 light = {0, 0, 0};
@@ -117,14 +98,12 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh,
         intersection_t hit;
         intersect(bvh, scene, ray, hit);
         if (!hit.has_hit) {
-            // // skybox light
-            // Vec3 Lsky = throughput * L_skybox(bvh, scene, ray, rstate, settings);
-            // light += Lsky;
+            light += throughput * settings.world.clear_color;
             break;
         }
 
         // direct light, attenuate using throughput which includes indirect lighting penalty
-        Vec3 Le = hit.mat->emit * throughput;
+        Vec3 Le = hit.mat->emissive * throughput;
         light += Le;
 
         float rr_prob = fminf(throughput.maxComponent(), RR_PROB_MAX);
@@ -134,11 +113,12 @@ integrate_Li_iterative(const __restrict__ bvh_t* bvh,
 
         bsdf_t bsdf;
         sample_bsdf(bsdf, ray.r, hit, rstate);
+        assert(bsdf.prob_i != 0 && "sample with 0 probability");
 
-        float cosTheta = std::abs(hit.normal.dot(bsdf.omega_i));
+        float cosTheta = std::abs(hit.trueNormal.dot(bsdf.omega_i));
 
         // set next ray
-        initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.normal);
+        initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.trueNormal);
 
         // find next throughput
         throughput *= bsdf.bsdf * (cosTheta / (bsdf.prob_i * rr_prob));
@@ -189,24 +169,16 @@ render_host(Vec3* img,
 __global__ void
 render_kernel(Vec3* img,
               const __restrict__ bvh_t* bvh,
-              const __restrict__ obj_scene_data* scene,
+              const __restrict__ scene_t* scene,
               const __restrict__ lst_t* lst,
               settings_t settings, int previous_samples) {
+                
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
     if (pixel_x >= settings.output.width || pixel_y >= settings.output.height) {
         return;  // out of image
     }
-
-    settings.world.sun.direction = {1, 1, 1};
-    settings.world.sun.direction.normalize();
-    settings.world.sun.light = 3 * Vec3(1, 1, 1);
-    settings.world.sun.angular_diameter = 1;
-    settings.world.sun.penumbra = 0.1;
-    // settings.world.sun.angular_diameter = 0.00872665;
-    // settings.world.sun.penumbra = 0.001;
-    settings.world.clear_light = 0.15 * Vec3(0.8, 0.8, 0.8);
 
     uint64_t curand_tid = pixel_y * settings.output.width + pixel_x;
 

@@ -10,7 +10,7 @@
 
 __host__ void
 render_host(Vec3* img,
-       const __restrict__ bvh_t* bvh, const __restrict__ obj_scene_data* scene,
+       const __restrict__ bvh_t* bvh, const __restrict__ scene_t* scene,
        int pixel_x, int pixel_y,
        settings_t settings, int previous_samples);
 
@@ -19,7 +19,7 @@ render_host(Vec3* img,
 __global__ void
 render_kernel(Vec3* img,
        const __restrict__ bvh_t* bvh, 
-       const __restrict__ obj_scene_data* scene,
+       const __restrict__ scene_t* scene,
        const __restrict__ lst_t* lst,
        settings_t settings, int previous_samples);
 

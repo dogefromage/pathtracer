@@ -1,66 +1,94 @@
 #pragma once
 
-#include "list.h"
+#include <unordered_map>
+#include <vector>
+
 #include "mathops.h"
 
-#define OBJ_FILENAME_LENGTH 256
-#define MATERIAL_NAME_SIZE 256
-#define OBJ_LINE_SIZE 256
-#define MAX_NGON_SIZE 4  // can only handle quads or triangles
+#define MATERIAL_NAME_SIZE 32
+#define MAX_FACE_VERTICES 3
 
 typedef struct {
-    int position;
-    int normal;
-    int texture;
-} obj_face_vertex;
+    Vec3 position;
+    /* if no normals passed, normal field set to (0,0,0)
+     * and face shading is set to SHADING_FLAT
+     */
+    Vec3 normal;
+
+} vertex_t;
+
+enum face_shading_t {
+    FLAT_SHADING,
+    BARY_SHADING,
+};
 
 typedef struct {
-    size_t vertex_count;
-    obj_face_vertex vertices[MAX_NGON_SIZE];
-    int material_index;
-} obj_face;
+    uint32_t vertices[MAX_FACE_VERTICES];
+    uint32_t vertexCount;
+    uint32_t material;
+    Vec3 faceNormal;
+    face_shading_t shading;
+} face_t;
 
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
-    Vec3 amb, diff, spec, emit;
-    float spec_exp, dissolve, refract_index;
-    int model;
-} obj_material;
+    Vec3 color, emissive;
+    float metallic, roughness, ior, colorAlpha;
+} material_t;
+
+enum light_type_t {
+    LIGHT_DIRECTIONAL,
+    LIGHT_POINT,
+    // LIGHT_SPOT, // TODO
+};
+
+// https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
+typedef struct {
+    Vec3 color;
+    float intensity;
+    light_type_t type;
+} light_t;
 
 typedef struct {
-    int position, target, updir;
-} obj_camera;
+    Vec3 position, target, updir;
+    float yfov;
+} camera_t;
 
 typedef struct {
-    List vertex_list;
-    List vertex_normal_list;
-    List vertex_texture_list;
-    List face_list;
-    List material_list;
+    fixed_array<vertex_t> vertices;
+    fixed_array<face_t> faces;
+    fixed_array<material_t> materials;
+    fixed_array<light_t> lights;
 
-    obj_camera *camera;
-} obj_growable_scene_data;
+    camera_t camera;
+} scene_t;
 
 typedef struct {
-    // keep vectors aligned in memory
-    Vec3 *vertex_list;
-    Vec3 *vertex_normal_list;
-    Vec3 *vertex_texture_list;
-    obj_face *face_list;
-    obj_material *material_list;
+    std::vector<vertex_t> vertices;
+    std::vector<face_t> faces;
+    std::vector<material_t> materials;
+    std::vector<light_t> lights;
 
-    size_t vertex_count;
-    size_t vertex_normal_count;
-    size_t vertex_texture_count;
-    size_t face_count;
-    size_t material_count;
+    std::unordered_map<int, uint32_t> materialMapping;
 
-    obj_camera camera;
+    camera_t camera;
 
-} obj_scene_data;
+} temp_scene_t;
 
-int parse_obj_scene(obj_scene_data *data_out, char *filename);
-void delete_obj_data(obj_scene_data *data_out);
+void scene_parse_gltf(scene_t &scene, const char *filename);
+void scene_delete_host(scene_t& scene);
 
-int scene_copy_to_device(obj_scene_data **dev_scene, obj_scene_data *host_scene);
-int free_device_scene(obj_scene_data *dev_scene);
+void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene);
+void free_device_scene(scene_t *dev_scene);
+
+
+inline void print_material(const material_t *material) {
+    printf("Material:\n");
+    printf("  Name: %s\n", material->name);
+    printf("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y, material->color.z);
+    printf("  Color alpha: %.2f\n", material->colorAlpha);
+    printf("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y, material->emissive.z);
+    printf("  Metallic: %.2f\n", material->metallic);
+    printf("  Roughness: %.2f\n", material->roughness);
+    printf("  IoR: %.2f\n", material->ior);
+}

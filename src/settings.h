@@ -12,21 +12,9 @@ typedef struct {
     struct {
         int seed = 42, samples = 100, samples_per_round = 10;
     } sampling;
-        
-    struct {
-        float sensor_height = 0.2, focal_length = 0.4;
-    } camera;
 
     struct {
-        bool verbose = false;
-    } debug;
-
-    struct {
-        Vec3 clear_light;
-        struct {
-            Vec3 direction, light;
-            float angular_diameter, penumbra;
-        } sun;     
+        Vec3 clear_color;
     } world;
 
 } settings_t;

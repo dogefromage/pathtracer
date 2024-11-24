@@ -5,9 +5,8 @@ output:
 
 sampling:
   seed: 42
-  samples: 20
+  samples: 300
   samples_per_round: 10
 
-camera:
-  focal_length: 0.3
-  sensor_height: 0.2
+world:
+  clear_color: 0.509 0.607 0.768
