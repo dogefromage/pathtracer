@@ -12,6 +12,20 @@
 #include "renderer.h"
 #include "scene.h"
 
+struct context_t {
+    const __restrict__ scene_t* scene;
+    const __restrict__ bvh_t* bvh;
+    const __restrict__ lst_t* lst;
+    const settings_t settings;
+    rand_state_t rstate;
+
+    PLATFORM context_t(
+        const scene_t* _scene,
+        const bvh_t* _bvh,
+        const lst_t* _lst,
+        settings_t _settings) : scene(_scene), bvh(_bvh), lst(_lst), settings(_settings) {}
+};
+
 static PLATFORM void
 get_camera_ray(Ray& ray, const __restrict__ scene_t* scene,
                float u, float v, const settings_t& settings) {
@@ -59,8 +73,6 @@ initialize_safe_ray(Ray& ray, const Vec3& origin, const Vec3& dir, const Vec3& n
 static PLATFORM void
 intersect(const __restrict__ bvh_t* bvh, const __restrict__ scene_t* scene,
           const Ray& ray, intersection_t& hit) {
-    hit.has_hit = 0;
-    hit.distance = CLEAR_DISTANCE;
 #ifdef USE_INTERSECT_CRUDE
     intersect_crude(scene, ray, hit);
 #else
@@ -85,173 +97,189 @@ sample_triangle_uniform(rand_state_t& rstate, const Vec3& a, const Vec3& b, cons
 //     return 0.5 * n.magnitude();
 // }
 
-static PLATFORM Vec3
-integrate_Ld(const __restrict__ bvh_t* bvh,
-             const __restrict__ scene_t* scene,
-             const __restrict__ lst_t* lst,
-             const Ray& ray, const intersection_t& hit, rand_state_t& rstate, settings_t& settings) {
-    if (!lst->nodes.count) {
-        return Vec3::Zero();
+struct area_light_sample_t {
+    Vec3 normal, dir;
+    bool visible;
+    float distance, area;
+    float p;
+};
+static PLATFORM void
+sample_area_light(area_light_sample_t& out,
+                  context_t& c,
+                  const Vec3& shadow_pos,
+                  const Vec3& shadow_normal,
+                  int face_index,
+                  bool direction_given) {
+    const face_t& face = c.scene->faces[face_index];
+    const material_t& mat = c.scene->materials[face.material];
+    assert(face.vertexCount == 3);
+
+    const Vec3& A = c.scene->vertices[face.vertices[0]].position;
+    const Vec3& B = c.scene->vertices[face.vertices[1]].position;
+    const Vec3& C = c.scene->vertices[face.vertices[2]].position;
+
+    Vec3 tri_cross = (C - B).cross(A - B);
+    float tri_cross_length = tri_cross.magnitude();
+    out.normal = tri_cross / tri_cross_length;
+    out.area = 0.5 * tri_cross_length;
+
+    if (!direction_given) {
+        Vec3 light_pos = sample_triangle_uniform(c.rstate, A, B, C);
+        out.dir = (light_pos - shadow_pos).normalized();
     }
 
-    // pick light node uniformly randoms
-    int nodeIndex = (int)(lst->nodes.count * random_uniform(rstate));
-    const lst_node_t& node = lst->nodes[nodeIndex % lst->nodes.count];
-    float p_inv = (float)lst->nodes.count;
+    Ray shadow_ray;
+    initialize_safe_ray(shadow_ray, shadow_pos, out.dir, shadow_normal);
+
+    // check visibility
+    intersection_t light_hit;
+    intersect(c.bvh, c.scene, shadow_ray, light_hit);
+    out.visible = light_hit.faceIndex == face_index;
+
+    // check if light points towards face
+    intersection_t pdf_hit;
+    intersect_face(c.scene, shadow_ray, pdf_hit, face_index);
+
+    out.distance = pdf_hit.distance;
+    if (pdf_hit.has_hit) {
+        float cosThetaY = std::abs(out.normal.dot(out.dir));
+        out.p = out.distance * out.distance / (out.area * cosThetaY);
+    } else {
+        out.p = 0;
+    }
+}
+
+struct light_source_sample_t {
+    Vec3 Ld;
+    float p_direct;
+    bool visible;
+    Vec3 light_dir;
+    bsdf_sample_t light_dir_bsdf;
+};
+
+static PLATFORM void
+sample_light_source(light_source_sample_t& out,
+                    context_t& c,
+                    const Ray& ray,
+                    const intersection_t& hit) {
+    if (c.lst->nodes.count == 0) {
+        out.p_direct = 0;
+        return;
+    }
+
+    // pick light node uniformly random
+    int nodeIndex = (int)(c.lst->nodes.count * random_uniform(c.rstate));
+    const lst_node_t& node = c.lst->nodes[nodeIndex % c.lst->nodes.count];
+
+    out.p_direct = 1.0f / (float)c.lst->nodes.count;
 
     if (node.type == LST_SOURCE_LIGHT) {
-        const light_t& light = scene->lights[0];
+        const light_t& light = c.scene->lights[0];
 
         if (light.type == LIGHT_POINT) {
-            Vec3 light_dir = light.position - hit.position;
-            float r = light_dir.magnitude();
-            light_dir /= r;
+            Vec3 hit_to_light = light.position - hit.position;
+            float r = hit_to_light.magnitude();
+            out.light_dir = hit_to_light / r;
 
-            Ray light_ray;
-            initialize_safe_ray(light_ray, hit.position, light_dir, hit.trueNormal);
+            Ray shadow_ray;
+            initialize_safe_ray(shadow_ray, hit.position, out.light_dir, hit.trueNormal);
 
             intersection_t light_hit;
-            intersect(bvh, scene, light_ray, light_hit);
-            bool visible = r < light_hit.distance;
-
-            if (!visible) {
-                return Vec3(0, 0, 0);
+            intersect(c.bvh, c.scene, shadow_ray, light_hit);
+            out.visible = r < light_hit.distance;
+            if (!out.visible) {
+                out.p_direct = 0;
+                return;
             }
 
             // diffuse
-            Vec3 bsdf = evaluate_bsdf(ray.r, light_dir, hit, rstate);
+            evaluate_bsdf(out.light_dir_bsdf, ray.r, out.light_dir, hit, c.rstate);
 
-            float cosThetaX = std::abs(hit.trueNormal.dot(light_dir));
+            float cosThetaX = std::abs(hit.trueNormal.dot(out.light_dir));
 
             float radiantIntensity = light.intensity / 683.0;  // this is only approximation, color spaces are violated
             Vec3 integrand = light.color * radiantIntensity / (r * r);
 
-            Vec3 Ld = bsdf * integrand * cosThetaX;  // *integrates* over point
+            out.Ld = out.light_dir_bsdf.bsdf * integrand * cosThetaX;  // *integrates* over point
 
-            return Ld * p_inv;
+            // probability stays same because point light is dirac delta function
+
         } else {
-            assert(false);  // TODO directional
+            // directional light:
+            assert(false);  // TODO
+            out.p_direct = 0;
         }
 
     } else {
-        // printf("face light\n");
+        // emitting face:
 
-        const face_t& face = scene->faces[node.index];
-        const material_t& mat = scene->materials[face.material];
-        assert(face.vertexCount == 3);
+        area_light_sample_t la;
+        sample_area_light(la, c, hit.position, hit.trueNormal, node.index, false);
 
-        const Vec3& A = scene->vertices[face.vertices[0]].position;
-        const Vec3& B = scene->vertices[face.vertices[1]].position;
-        const Vec3& C = scene->vertices[face.vertices[2]].position;
+        out.light_dir = la.dir;
 
-        // Vec3 light_pos = 0.3333 * (A + B + C);
-        Vec3 light_pos = sample_triangle_uniform(rstate, A, B, C);
+        evaluate_bsdf(out.light_dir_bsdf, ray.r, out.light_dir, hit, c.rstate);
+        // printf("%.2f\n", out.light_dir_bsdf.prob_i);
 
-        Vec3 tri_cross = (C - B).cross(A - B);
-        float tri_cross_length = tri_cross.magnitude();
-        Vec3 tri_normal = tri_cross / tri_cross_length;
-        float tri_area = 0.5 * tri_cross_length;
+        const face_t& face = c.scene->faces[node.index];
+        const material_t& mat = c.scene->materials[face.material];
+        Vec3 radiosity = mat.emissive;
 
-        p_inv *= tri_area;
+        float cosThetaX = std::abs(hit.trueNormal.dot(out.light_dir));
 
-        Vec3 light_dir = light_pos - hit.position;
-        float r = light_dir.magnitude();
-        light_dir /= r;
+        out.p_direct = la.p;
+        out.visible = la.visible;
 
-        Ray light_ray;
-        initialize_safe_ray(light_ray, hit.position, light_dir, hit.trueNormal);
+        if (la.visible) {
+            out.Ld = out.light_dir_bsdf.bsdf * radiosity * cosThetaX;
 
-        intersection_t light_hit;
-        intersect(bvh, scene, light_ray, light_hit);
-        // printf("%.3f, %.3f\n", r, light_hit.distance);
+        } else {
+            out.Ld = Vec3::Zero();
+        }
+    }
+}
 
-        // bool visible = r - 3e-3f > light_hit.distance;
-        bool visible = light_hit.faceIndex == node.index;
-        if (!visible) {
-            return Vec3(0, 0, 0);
+static PLATFORM float
+evaluate_direct_p(context_t& c,
+                  const Ray& ray,
+                  const intersection_t& hit) {
+    float p_total = 0;
+
+    for (int i = 0; i < c.lst->nodes.count; i++) {
+        float p_node;
+
+        const lst_node_t& node = c.lst->nodes[i];
+
+        if (node.type == LST_SOURCE_LIGHT) {
+            p_node = 0;
+            
+        } else {
+            // face
+            area_light_sample_t la;
+            la.dir = ray.r;
+            sample_area_light(la, c, hit.position, hit.trueNormal, node.index, true);
+            p_node = la.p;
         }
 
-        // diffuse
-        Vec3 bsdf = evaluate_bsdf(ray.r, light_dir, hit, rstate);
-
-        float cosThetaX = std::abs(hit.trueNormal.dot(light_dir));
-        float cosThetaY = std::abs(tri_normal.dot(light_dir));
-
-        Vec3 radiosity = mat.emissive;  // assumes W/m^2
-        Vec3 integrand = cosThetaY * radiosity / (r * r /* * 2 * M_PI */);
-
-        Vec3 Ld = bsdf * integrand * cosThetaX;  // integrate light
-
-        // Ld.print();
-
-        return Ld * p_inv;
+        p_total += p_node;
     }
 
-    assert(false);  // ???
-    return Vec3::Zero();
+    p_total /= (float)c.lst->nodes.count;
+    return p_total;
 }
 
 #define RR_PROB_MAX 0.99
 
 static PLATFORM Vec3
-integrate_Li(const __restrict__ bvh_t* bvh,
-             const __restrict__ scene_t* scene,
-             const __restrict__ lst_t* lst,
-             Ray ray, rand_state_t& rstate, settings_t& settings) {
+integrate_Li(context_t& c, Ray ray) {
     Vec3 light = {0, 0, 0};
     Vec3 throughput = {1, 1, 1};
 
     for (int depth = 0;; depth++) {
         intersection_t hit;
-        intersect(bvh, scene, ray, hit);
+        intersect(c.bvh, c.scene, ray, hit);
         if (!hit.has_hit) {
-            light += throughput * settings.world.clear_color;
-            break;
-        }
-
-        if (depth == 0) {
-            // direct light, attenuate using throughput which includes indirect lighting penalty
-            Vec3 Le = hit.mat->emissive * throughput;
-            light += Le;
-        }
-
-
-        float rr_prob = fminf(throughput.maxComponent(), RR_PROB_MAX);
-        if (random_uniform(rstate) >= rr_prob) {
-            break;  // ray dies
-        }
-
-        light += throughput * integrate_Ld(bvh, scene, lst, ray, hit, rstate, settings);
-
-        bsdf_sample_t bsdf;
-        sample_bsdf(bsdf, ray.r, hit, rstate);
-        assert(bsdf.prob_i != 0 && "sample with 0 probability");
-
-        float cosTheta = std::abs(hit.trueNormal.dot(bsdf.omega_i));
-
-        // set next ray
-        initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.trueNormal);
-
-        // find next throughput
-        throughput *= bsdf.bsdf * (cosTheta / (bsdf.prob_i * rr_prob));
-    }
-
-    return light;
-}
-
-static PLATFORM Vec3
-integrate_Li_classic(const __restrict__ bvh_t* bvh,
-             const __restrict__ scene_t* scene,
-             const __restrict__ lst_t* lst,
-             Ray ray, rand_state_t& rstate, settings_t& settings) {
-    Vec3 light = {0, 0, 0};
-    Vec3 throughput = {1, 1, 1};
-
-    for (int depth = 0;; depth++) {
-        intersection_t hit;
-        intersect(bvh, scene, ray, hit);
-        if (!hit.has_hit) {
-            light += throughput * settings.world.clear_color;
+            light += throughput * c.settings.world.clear_color;
             break;
         }
 
@@ -259,25 +287,37 @@ integrate_Li_classic(const __restrict__ bvh_t* bvh,
         Vec3 Le = hit.mat->emissive * throughput;
         light += Le;
 
-
         float rr_prob = fminf(throughput.maxComponent(), RR_PROB_MAX);
-        if (random_uniform(rstate) >= rr_prob) {
+        if (random_uniform(c.rstate) >= rr_prob) {
             break;  // ray dies
         }
 
-        // light += throughput * integrate_Ld(bvh, scene, lst, ray, hit, rstate, settings);
+        light_source_sample_t lss;
+        sample_light_source(lss, c, ray, hit);
+
+        if (lss.visible && lss.p_direct > 0) {
+            // balance heuristic on part of direct light
+
+            // TODO maybe cancel this division
+            float weight = lss.p_direct / (lss.p_direct + lss.light_dir_bsdf.prob_i);
+            // printf("%.2f, %.2f\n", lss.p_direct, lss.light_dir_bsdf.prob_i);
+            light += throughput * (weight * lss.Ld / lss.p_direct);
+        }
 
         bsdf_sample_t bsdf;
-        sample_bsdf(bsdf, ray.r, hit, rstate);
+        sample_bsdf(bsdf, ray.r, hit, c.rstate);
         assert(bsdf.prob_i != 0 && "sample with 0 probability");
-
-        float cosTheta = std::abs(hit.trueNormal.dot(bsdf.omega_i));
 
         // set next ray
         initialize_safe_ray(ray, hit.position, bsdf.omega_i, hit.trueNormal);
 
+        float p_direct = evaluate_direct_p(c, ray, hit);
+        float weight = bsdf.prob_i / (p_direct + bsdf.prob_i);
+
+        float cosTheta = std::abs(hit.trueNormal.dot(bsdf.omega_i));
+
         // find next throughput
-        throughput *= bsdf.bsdf * (cosTheta / (bsdf.prob_i * rr_prob));
+        throughput *= bsdf.bsdf * (weight * cosTheta / (bsdf.prob_i * rr_prob));
     }
 
     return light;
@@ -322,6 +362,52 @@ render_host(Vec3* img,
 
 #else
 
+// static PLATFORM Vec3
+// sphere_sample_uniform(rand_state_t& rstate) {
+//     Vec3 r;
+//     do {
+//         r.x = 2 * random_uniform(rstate) - 1;
+//         r.y = 2 * random_uniform(rstate) - 1;
+//         r.z = 2 * random_uniform(rstate) - 1;
+//     } while (r.dot(r) > 1);
+
+//     return r.normalized();
+// }
+
+// static PLATFORM void 
+// sanity_check(context_t& c) {
+
+//     float a = 3;
+//     Vec3 p;
+//     p.x = 2 * a * random_uniform(c.rstate) - a;
+//     p.y = 2 * a * random_uniform(c.rstate) - a;
+//     p.z = 2 * a * random_uniform(c.rstate) - a;
+
+//     intersection_t test_hit = {
+//         has_hit: true,
+//         distance: 0,
+//         position: p,
+//         lightingNormal: Vec3(1, 0, 0),
+//         trueNormal: Vec3(1, 0, 0),
+//         faceIndex: -1,
+//         mat: nullptr,
+//     };
+
+//     int N = 100000;
+//     float prob = 0;
+
+//     for (int i = 0; i < N; i++) {
+
+//         Vec3 r = sphere_sample_uniform(c.rstate);
+
+//         Ray ray = { o: p, r: r };
+
+//         prob += evaluate_direct_p(c, ray, test_hit);
+//     }
+
+//     printf("sum of p = %f\n", 4 * 3.1415 * prob / N);
+// }
+
 __global__ void
 render_kernel(Vec3* img,
               const __restrict__ bvh_t* bvh,
@@ -337,15 +423,19 @@ render_kernel(Vec3* img,
 
     uint64_t curand_tid = pixel_y * settings.output.width + pixel_x;
 
-    rand_state_t rstate;
-    random_init(rstate, settings.sampling.seed, curand_tid);
+    context_t c(scene, bvh, lst, settings);
+
+    random_init(c.rstate, settings.sampling.seed, curand_tid);
 
     Vec3 total_light = {0, 0, 0};
 
+    // sanity_check(c);
+    // return;
+
     for (int i = 0; i < currentSamples; i++) {
         float sensor_variance = 0.33;
-        float sensor_x = (float)pixel_x + sensor_variance * random_normal(rstate);
-        float sensor_y = (float)pixel_y + sensor_variance * random_normal(rstate);
+        float sensor_x = (float)pixel_x + sensor_variance * random_normal(c.rstate);
+        float sensor_y = (float)pixel_y + sensor_variance * random_normal(c.rstate);
 
         float u = (2 * sensor_x - settings.output.width) / (float)settings.output.height;
         float v = (2 * sensor_y - settings.output.height) / (float)settings.output.height;
@@ -353,12 +443,13 @@ render_kernel(Vec3* img,
         Ray camera_ray;
         get_camera_ray(camera_ray, scene, u, v, settings);
 
-        Vec3 current_light = integrate_Li(bvh, scene, lst, camera_ray, rstate, settings);
-
+        Vec3 current_light = integrate_Li(c, camera_ray);
         // Vec3 current_light = integrate_Li_classic(bvh, scene, lst, camera_ray, rstate, settings);
 
         total_light += current_light;
     }
+
+    total_light *= 2; // test exposure
 
     total_light /= (float)currentSamples;
 

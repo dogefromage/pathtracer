@@ -93,8 +93,8 @@ intersect_face(const __restrict__ scene_t* scene,
 
     // loop over n-gon triangles fan-style
     for (size_t i = 2; i < face.vertexCount; i++) {
-        const uint32_t& a = face.vertices[0];
         const uint32_t& b = face.vertices[i - 1];
+        const uint32_t& a = face.vertices[0];
         const uint32_t& c = face.vertices[i];
         const Vec3& A = scene->vertices[a].position;
         const Vec3& B = scene->vertices[b].position;
@@ -114,7 +114,7 @@ intersect_face(const __restrict__ scene_t* scene,
             float t = 1.0 - u - v;
             hit.position = barycentric_lincom(A, B, C, t, u, v);
 
-            hit.texture_coord.set(0);  // TODO
+            // hit.texture_coord.set(0);  // TODO
             // hit.texture_coord = barycentric_lincom(
             //     scene->vertex_texture_list[a.texture],
             //     scene->vertex_texture_list[b.texture],

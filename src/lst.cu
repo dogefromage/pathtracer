@@ -80,35 +80,35 @@ void lst_free_device(lst_t* d_lst) {
 //     assert(false);
 // }
 
-PLATFORM void
-lst_sample(light_sample_t& sample, const lst_t* lst, const scene_t* scene, rand_state_t& rstate) {
-    // if (!lst->nodes.count) {
-    //     sample.p = 0;
-    //     return;
-    // }
+// PLATFORM void
+// lst_sample(light_sample_t& sample, const lst_t* lst, const scene_t* scene, rand_state_t& rstate) {
+//     // if (!lst->nodes.count) {
+//     //     sample.p = 0;
+//     //     return;
+//     // }
 
-    // // pick light node uniformly randoms
-    // int nodeIndex = (int)(lst->nodes.count * random_uniform(rstate));
-    // const lst_node_t& node = lst->nodes[nodeIndex];
+//     // // pick light node uniformly randoms
+//     // int nodeIndex = (int)(lst->nodes.count * random_uniform(rstate));
+//     // const lst_node_t& node = lst->nodes[nodeIndex];
 
-    // if (node.type == LST_SOURCE_FACE) {
-    //     assert(false);
-    // }
-    // if (node.type == LST_SOURCE_LIGHT) {
-    //     const light_t& light = scene->lights[node.index];
+//     // if (node.type == LST_SOURCE_FACE) {
+//     //     assert(false);
+//     // }
+//     // if (node.type == LST_SOURCE_LIGHT) {
+//     //     const light_t& light = scene->lights[node.index];
         
-    //     switch (light.type) {
-    //         case LIGHT_POINT:
-    //             lst_sample_point_light(sample, light, scene, rstate);
-    //             break;
-    //         case LIGHT_DIRECTIONAL:
-    //             lst_sample_directional_light(sample, light, scene, rstate);
-    //             break;
-    //         default:
-    //             assert(false);
-    //             break;
-    //     }
+//     //     switch (light.type) {
+//     //         case LIGHT_POINT:
+//     //             lst_sample_point_light(sample, light, scene, rstate);
+//     //             break;
+//     //         case LIGHT_DIRECTIONAL:
+//     //             lst_sample_directional_light(sample, light, scene, rstate);
+//     //             break;
+//     //         default:
+//     //             assert(false);
+//     //             break;
+//     //     }
 
 
-    // }
-}
+//     // }
+// }

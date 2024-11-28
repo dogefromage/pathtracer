@@ -10,13 +10,13 @@ inline std::ostream& operator<<(std::ostream& os, const Ray& ray) {
     return os;
 }
 
-typedef struct {
-    int has_hit;
-    float distance;
-    Vec3 position, lightingNormal, trueNormal, texture_coord;
+struct intersection_t {
+    bool has_hit = false;
+    float distance = CLEAR_DISTANCE;
+    Vec3 position, lightingNormal, trueNormal;
     int faceIndex;
     const material_t* mat;
-} intersection_t;
+};
 
 PLATFORM void 
 intersect_face(const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit, int faceIndex);

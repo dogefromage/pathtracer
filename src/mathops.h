@@ -76,7 +76,7 @@ struct Vec3 {
         x = y = z = a;
     }
 
-    MATH_PLATFORM void print() {
+    MATH_PLATFORM void print() const {
         printf("(%.2f, %.2f, %.2f)\n", x, y, z);
     }
 

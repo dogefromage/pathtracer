@@ -23,11 +23,11 @@ void lst_free_host(lst_t& lst);
 void lst_copy_device(lst_t** d_lst, const lst_t* h_lst);
 void lst_free_device(lst_t* d_lst);
 
-typedef struct {
-    Vec3 sourcePosition;
-    Vec3 radiance;
-    float p;
-} light_sample_t;
+// typedef struct {
+//     Vec3 sourcePosition;
+//     Vec3 radiance;
+//     float p;
+// } light_sample_t;
 
-PLATFORM void
-lst_sample(light_sample_t& light, const lst_t* lst, const scene_t* scene, rand_state_t& rstate);
+// PLATFORM void
+// lst_sample(light_sample_t& light, const lst_t* lst, const scene_t* scene, rand_state_t& rstate);

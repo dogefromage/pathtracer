@@ -1,0 +1,51 @@
+function traceRay(ray, depth):
+    if depth == 0:
+        return Color(0)  # Terminate recursion
+
+    # 1. Find the nearest intersection of the ray with the scene
+    hit = scene.intersect(ray)
+    if hit == None:
+        return backgroundColor(ray.direction)  # No intersection
+
+    # 2. Initialize the color contribution
+    finalColor = Color(0)
+
+    # 3. Direct lighting: Sample the point light source
+    lightSampleDirection = normalize(pointLight.position - hit.position)
+    shadowRay = Ray(hit.position, lightSampleDirection)
+    
+    if not scene.isOccluded(shadowRay):  # Check visibility to the light
+        # Compute direct lighting contribution
+        L_direct = pointLight.intensity / distanceSquared(pointLight.position, hit.position)
+        L_direct *= max(dot(hit.normal, lightSampleDirection), 0)  # Lambert's cosine law
+
+        # Compute the PDF of the light sample (delta distribution for point light)
+        p_direct = 1.0  # Only one direction possible for point light
+
+        # Add the direct contribution weighted by the balance heuristic
+        p_indirect = bsdfPDF(hit, lightSampleDirection)  # Indirect PDF for the same direction
+        weight = p_direct / (p_direct + p_indirect)
+        finalColor += weight * L_direct * bsdf(hit, lightSampleDirection)
+
+    # 4. Indirect lighting: Sample the BSDF
+    bsdfSampleDirection = sampleBSDF(hit)
+    bsdfValue = bsdf(hit, bsdfSampleDirection)
+    p_indirect = bsdfPDF(hit, bsdfSampleDirection)  # PDF for BSDF sampling
+
+    # Compute indirect lighting contribution recursively
+    reflectedRay = Ray(hit.position, bsdfSampleDirection)
+    L_indirect = traceRay(reflectedRay, depth - 1)
+    L_indirect *= bsdfValue * max(dot(hit.normal, bsdfSampleDirection), 0)
+
+    # Compute the PDF of the same direction under light sampling
+    if isLightVisible(hit.position, bsdfSampleDirection):
+        p_direct = 1.0  # Delta PDF for point light
+    else:
+        p_direct = 0.0  # Light is not visible in this direction
+
+    # Add the indirect contribution weighted by the balance heuristic
+    weight = p_indirect / (p_direct + p_indirect)
+    finalColor += weight * L_indirect
+
+    # 5. Return the accumulated color
+    return finalColor

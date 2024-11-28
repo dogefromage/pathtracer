@@ -346,7 +346,7 @@ scene_parse_mesh(temp_scene_t& scene, const Model& model,
         int vertCount = positions.size();
         assert(vertCount);
 
-        bool hasNormals = !normals.size();
+        bool hasNormals = normals.size() > 0;
         assert(!hasNormals || normals.size() == vertCount);
 
         int numIndices = indices.size();
@@ -487,7 +487,6 @@ void scene_copy_to_device(scene_t** dev_scene, scene_t* host_scene) {
 }
 
 void free_device_scene(scene_t* dev_scene) {
-    
     scene_t placeholder;
     copy_host_struct(&placeholder, dev_scene);
 
