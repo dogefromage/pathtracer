@@ -105,7 +105,7 @@ refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
 }
 
 static PLATFORM void 
-sample_bsdf_mirror(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
+sample_bsdf_mirror(bsdf_sample_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
     out.omega_i = reflect(hit.lightingNormal, v_inv);
     out.prob_i = 1.0;
     float cos_theta = out.omega_i.dot(hit.lightingNormal);
@@ -113,7 +113,7 @@ sample_bsdf_mirror(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, ra
 }
 
 static PLATFORM void 
-sample_bsdf_glass(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
+sample_bsdf_glass(bsdf_sample_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
     bool isBackface = v_inv.dot(hit.trueNormal) > 0;
 
     float n1 = 1.0;
@@ -144,7 +144,7 @@ sample_bsdf_glass(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, ran
 }
 
 PLATFORM void 
-sample_bsdf(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
+sample_bsdf(bsdf_sample_t& out, const Vec3& v_inv, const intersection_t& hit, rand_state_t& rstate) {
 
     bool isGlass = false;
     // bool isGlass = hit.mat->diffuse <= 0.01;
@@ -171,4 +171,10 @@ sample_bsdf(bsdf_t& out, const Vec3& v_inv, const intersection_t& hit, rand_stat
     // out.prob_i = 1 / (2 * M_PIf);  /* probability of chosen direction */
 
     return;
+}
+
+PLATFORM Vec3 
+evaluate_bsdf(const Vec3& v_inv, const Vec3& w, const intersection_t& hit, rand_state_t& rstate) {
+    // assume diffuse
+    return hit.mat->color / M_PIf;
 }

@@ -104,6 +104,7 @@ intersect_face(const __restrict__ scene_t* scene,
         int has_hit = moeller_trumbore_intersect(ray, A, B, C, &t, &u, &v);
 
         if (has_hit && t >= 0 && t < hit.distance) {
+            hit.faceIndex = faceIndex;
             hit.has_hit = 1;
             hit.distance = t;
             assert(face.material < (int)scene->materials.count);

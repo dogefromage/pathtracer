@@ -14,6 +14,7 @@ typedef struct {
     int has_hit;
     float distance;
     Vec3 position, lightingNormal, trueNormal, texture_coord;
+    int faceIndex;
     const material_t* mat;
 } intersection_t;
 

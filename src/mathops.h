@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cmath>
 #include <ostream>
+#include <vector>
 
 #include "config.h"
 
@@ -37,7 +38,7 @@ MATH_PLATFORM inline float test_finite(float x) {
 
 template <typename T>
 struct fixed_array {
-    int count;
+    uint32_t count;
     T* items;
 
     MATH_PLATFORM const T& operator[](size_t k) const {
@@ -50,6 +51,13 @@ struct fixed_array {
         return items[k];
     }
 };
+
+template <typename T>
+void fixed_array_from_vector(fixed_array<T>& dest, const std::vector<T>& src) {
+    dest.count = src.size();
+    dest.items = (T*)malloc(sizeof(T) * dest.count);
+    std::copy(src.begin(), src.end(), dest.items);
+}
 
 struct Vec3 {
     float x, y, z;
@@ -68,7 +76,7 @@ struct Vec3 {
         x = y = z = a;
     }
 
-    void print() {
+    MATH_PLATFORM void print() {
         printf("(%.2f, %.2f, %.2f)\n", x, y, z);
     }
 
@@ -232,7 +240,6 @@ inline MATH_PLATFORM Vec3 operator*(float a, Vec3 v) {
 inline MATH_PLATFORM Vec3 operator/(float a, Vec3 v) {
     return Vec3::Const(a) / v;
 }
-
 
 inline std::ostream& operator<<(std::ostream& os, const Vec3& a) {
     char buf[128];

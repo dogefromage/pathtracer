@@ -44,9 +44,9 @@ enum light_type_t {
 
 // https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
 typedef struct {
-    Vec3 color;
-    float intensity;
     light_type_t type;
+    Vec3 color, position, direction;
+    float intensity;
 } light_t;
 
 typedef struct {

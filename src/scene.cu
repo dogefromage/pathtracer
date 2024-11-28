@@ -145,6 +145,11 @@ scene_parse_light(temp_scene_t& scene, const Model& model,
     }
     light.intensity = modelLight.intensity;
 
+    light.position = (modelTransform * Vec4(0, 0, 0, 1)).dehomogenise();
+
+    Mat3 linearTransform = modelTransform.getLinearPart();
+    light.direction = (linearTransform * Vec3(0, 0, -1)).normalized();
+
     if (modelLight.type == "directional") {
         light.type = LIGHT_DIRECTIONAL;
     } else if (modelLight.type == "point") {
@@ -153,6 +158,11 @@ scene_parse_light(temp_scene_t& scene, const Model& model,
         printf("Unsupported light '%s'\n", modelLight.type.c_str());
         exit(EXIT_FAILURE);
     }
+
+    // printf("Light:\n");
+    // light.color.print();
+    // printf("%f\n", light.intensity);
+    // printf("%d\n", light.type);
 
     scene.lights.push_back(light);
 }
@@ -407,13 +417,6 @@ scene_parse_node(temp_scene_t& scene, const Model& model, const Node& node, Mat4
     }
 }
 
-template <typename T>
-void copy_to_final(fixed_array<T>& dest, const std::vector<T>& src) {
-    dest.count = src.size();
-    dest.items = (T*)malloc(sizeof(T) * dest.count);
-    std::copy(src.begin(), src.end(), dest.items);
-}
-
 void scene_parse_gltf(scene_t& finalScene, const char* filename) {
     Model model;
     TinyGLTF loader;
@@ -445,10 +448,10 @@ void scene_parse_gltf(scene_t& finalScene, const char* filename) {
     finalScene.camera = tempScene.camera;
 
     // copy into final scene
-    copy_to_final(finalScene.vertices, tempScene.vertices);
-    copy_to_final(finalScene.faces, tempScene.faces);
-    copy_to_final(finalScene.materials, tempScene.materials);
-    copy_to_final(finalScene.lights, tempScene.lights);
+    fixed_array_from_vector(finalScene.vertices, tempScene.vertices);
+    fixed_array_from_vector(finalScene.faces, tempScene.faces);
+    fixed_array_from_vector(finalScene.materials, tempScene.materials);
+    fixed_array_from_vector(finalScene.lights, tempScene.lights);
 }
 
 void scene_delete_host(scene_t& scene) {
