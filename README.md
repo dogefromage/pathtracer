@@ -1,4 +1,4 @@
-# pathtracer
+# pathtracer from scratch
 
 Started out as a small project over the break and has spiraled out of control over time. Runs on cuda-12.5.
 
