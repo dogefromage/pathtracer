@@ -177,7 +177,10 @@ sample_light_source(light_source_sample_t& out,
         const light_t& light = c.scene->lights[0];
 
         if (light.type == LIGHT_POINT) {
-            Vec3 hit_to_light = light.position - hit.position;
+            float light_rad = 0.1;
+            Vec3 light_pos = light.position + light_rad * sphere_sample_uniform(c.rstate);
+
+            Vec3 hit_to_light = light_pos - hit.position;
             float r = hit_to_light.magnitude();
             out.light_dir = hit_to_light / r;
 

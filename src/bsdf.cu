@@ -23,7 +23,7 @@ world_of_local_dir(const Vec3& normal, const Vec3& v) {
     return x * v.x + y * v.y + z * v.z;
 }
 
-static PLATFORM Vec3
+PLATFORM Vec3
 sphere_sample_uniform(rand_state_t& rstate) {
     Vec3 r;
     do {

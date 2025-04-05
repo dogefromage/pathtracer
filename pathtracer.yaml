@@ -1,11 +1,11 @@
 
 output:
-  width: 1000
-  height: 1000
+  width: 1500
+  height: 1500
 
 sampling:
   seed: 42
-  samples: 100
+  samples: 200
   samples_per_round: 50
 
 world:

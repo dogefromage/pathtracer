@@ -38,7 +38,7 @@ Rendered 80 / 300 samples in 1.2s - 64.99 samples/s - 23.40 MPS/s
 ...
 ```
 
-![Latest render](/glass.bmp)
+![Latest render](/output.png)
 
 ## Currently implements:
 * basic path tracing on gpu using CUDA or optionally using CPU
