@@ -1,26 +1,29 @@
 #include <stdio.h>
 
-#include "assert.h"
-#include "bvh.h"
-#include "utils.h"
 #include <iostream>
 #include <limits>
 
-static Vec3
-calculate_face_centroid(const scene_t& scene, const face_t& face) {
+#include "assert.h"
+#include "bvh.h"
+#include "logger.h"
+#include "utils.h"
+
+#define BVH_TRAVERSAL_STACK_SIZE 64
+
+static Vec3 calculate_face_centroid(const scene_t &scene, const face_t &face) {
     float totalArea = 0;
-    Vec3 centroid = { 0, 0, 0 };
+    Vec3 centroid = {0, 0, 0};
 
     for (uint32_t i = 2; i < face.vertexCount; i++) {
-        const Vec3& A = scene.vertices[face.vertices[0]].position;
-        const Vec3& B = scene.vertices[face.vertices[i - 1]].position;
-        const Vec3& C = scene.vertices[face.vertices[i]].position;
-        
+        const Vec3 &A = scene.vertices[face.vertices[0]].position;
+        const Vec3 &B = scene.vertices[face.vertices[i - 1]].position;
+        const Vec3 &C = scene.vertices[face.vertices[i]].position;
+
         Vec3 edge1 = B.cross(A);
         Vec3 edge2 = C.cross(A);
         Vec3 cross = edge1.cross(edge2);
         float triArea = 0.5 * cross.magnitude();
-        
+
         Vec3 triCentroid = (1 / 3.0f) * (A + B + C);
 
         // weighted sum of centroids
@@ -36,23 +39,23 @@ calculate_face_centroid(const scene_t& scene, const face_t& face) {
     return centroid;
 }
 
-static void aabb_grow_face(const scene_t& scene, AABB& aabb, uint32_t faceIndex) {
+static void aabb_grow_face(const scene_t &scene, AABB &aabb, uint32_t faceIndex) {
     const face_t &face = scene.faces[faceIndex];
     for (uint32_t j = 0; j < face.vertexCount; j++) {
-        const Vec3& v = scene.vertices[face.vertices[j]].position;
+        const Vec3 &v = scene.vertices[face.vertices[j]].position;
         aabb.grow(v);
     }
 }
 
-static void update_node_bounds(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex) {
-    bvh_node_t& node = bvh.nodes[nodeIndex];
+static void update_node_bounds(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex) {
+    bvh_node_t &node = bvh.nodes[nodeIndex];
     node.bounds.reset();
     for (uint32_t i = node.start; i < node.end; i++) {
         aabb_grow_face(scene, node.bounds, bvh.indices[i]);
     }
 }
 
-void swap(uint32_t* a, uint32_t* b) {
+void swap(uint32_t *a, uint32_t *b) {
     uint32_t t = *a;
     *a = *b;
     *b = t;
@@ -60,18 +63,17 @@ void swap(uint32_t* a, uint32_t* b) {
 
 #define NUM_BINS 16
 
-struct Bin { 
-    AABB bounds; 
-    int primitiveCount = 0; 
+struct Bin {
+    AABB bounds;
+    int primitiveCount = 0;
 };
 
 // https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
-static float
-find_best_split_plane(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
-                      int* bestAxis, float* bestSplit) {
+static float find_best_split_plane(const scene_t &scene, bvh_t &bvh, bvh_node_t &node,
+                                   int *bestAxis, float *bestSplit) {
     AABB centroidBounds;
     for (size_t i = node.start; i < node.end; i++) {
-        const Vec3& c = bvh.centroids[bvh.indices[i]];
+        const Vec3 &c = bvh.centroids[bvh.indices[i]];
         centroidBounds.grow(c);
     }
 
@@ -89,12 +91,12 @@ find_best_split_plane(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
 
         float scale = (boundsMax - boundsMin) / NUM_BINS;
         float inv_scale = 1 / scale;
-            
+
         for (uint32_t i = node.start; i < node.end; i++) {
             float centroid = bvh.centroids[bvh.indices[i]][a];
 
-            int binIndex = min(NUM_BINS - 1, (int)((centroid - boundsMin) * inv_scale)); 
-            Bin& bin = bins[binIndex];
+            int binIndex = min(NUM_BINS - 1, (int)((centroid - boundsMin) * inv_scale));
+            Bin &bin = bins[binIndex];
             aabb_grow_face(scene, bin.bounds, bvh.indices[i]);
             bin.primitiveCount++;
         }
@@ -131,15 +133,14 @@ find_best_split_plane(const scene_t& scene, bvh_t& bvh, bvh_node_t& node,
     return bestCost;
 }
 
-static void
-subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats, int depth) {
-
+static void subdivide(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_stats_t &stats,
+                      int depth) {
     stats.maxDepth = std::max(stats.maxDepth, depth);
 
-    bvh_node_t& node = bvh.nodes[nodeIndex];
+    bvh_node_t &node = bvh.nodes[nodeIndex];
     int count = node.end - node.start;
     if (count <= 2) {
-        return;  // stop criterion
+        return; // stop criterion
     }
 
     int bestAxis = -1;
@@ -162,8 +163,8 @@ subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& sta
 
     uint32_t leftIndex = bvh.nodeCount++;
     uint32_t rightIndex = bvh.nodeCount++;
-    bvh_node_t& left = bvh.nodes[leftIndex];
-    bvh_node_t& right = bvh.nodes[rightIndex];
+    bvh_node_t &left = bvh.nodes[leftIndex];
+    bvh_node_t &right = bvh.nodes[rightIndex];
     left.start = node.start;
     left.end = right.start = i;
     right.end = node.end;
@@ -172,25 +173,25 @@ subdivide(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& sta
     time(&currTime);
     double elapsed_seconds = difftime(currTime, stats.lastInfo);
     if (elapsed_seconds > 1.0) {
-        printf("created %u bvh nodes (of at most %d)\n", bvh.nodeCount, bvh.nodes.count);
+        log_trace("created %u bvh nodes (of at most %d)\n", bvh.nodeCount, bvh.nodes.count);
         stats.lastInfo = currTime;
     }
 
     node.leftChild = leftIndex;
     node.rightChild = rightIndex;
-    node.start = node.end = 0;  // make non-leaf
+    node.start = node.end = 0; // make non-leaf
     update_node_bounds(scene, bvh, leftIndex);
     update_node_bounds(scene, bvh, rightIndex);
     subdivide(scene, bvh, leftIndex, stats, depth + 1);
     subdivide(scene, bvh, rightIndex, stats, depth + 1);
 }
 
-static void
-calculate_stats(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats) {
+static void calculate_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex,
+                            bvh_stats_t &stats) {
     stats.numberLeaves = 0;
     stats.averageLeafSize = 0;
     for (uint32_t i = 0; i < bvh.nodeCount; i++) {
-        bvh_node_t& node = bvh.nodes[i];
+        bvh_node_t &node = bvh.nodes[i];
         uint32_t faces = node.end - node.start;
         if (faces > 0) {
             stats.numberLeaves++;
@@ -200,26 +201,20 @@ calculate_stats(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_
     stats.averageLeafSize /= stats.numberLeaves;
 }
 
-static void
-print_stats(const scene_t& scene, bvh_t& bvh, uint32_t nodeIndex, bvh_stats_t& stats) {
-    if (!doVerbosePrinting) {
-        return;
-    }
-
-    printf("\nbvh_t stats:\n");
-    printf("  node count = %u\n", bvh.nodeCount);
-    printf("  optimal node count = %u\n", bvh.nodes.count);
-    printf("  number leafs = %u\n", stats.numberLeaves);
-    printf("  skipped faces = %u / %u = %.3f\n",
-           stats.totalSkippedFaces, bvh.indices.count,
-           stats.totalSkippedFaces / (float)bvh.indices.count);
-    printf("  average leaf size = %.2f\n", stats.averageLeafSize);
-    printf("  max tree height =  %d\n", stats.maxDepth);
+static void print_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex,
+                        bvh_stats_t &stats) {
+    log_trace("\nbvh_t stats:\n");
+    log_trace("  node count = %u\n", bvh.nodeCount);
+    log_trace("  optimal node count = %u\n", bvh.nodes.count);
+    log_trace("  number leafs = %u\n", stats.numberLeaves);
+    log_trace("  skipped faces = %u / %u = %.3f\n", stats.totalSkippedFaces, bvh.indices.count,
+              stats.totalSkippedFaces / (float)bvh.indices.count);
+    log_trace("  average leaf size = %.2f\n", stats.averageLeafSize);
+    log_trace("  max tree height =  %d\n", stats.maxDepth);
 }
 
-void
-bvh_build(bvh_t& bvh, const scene_t& scene) {
-    printf("Building bvh_t...  \n");
+void bvh_build(bvh_t &bvh, const scene_t &scene) {
+    log_info("Building BVH...  \n");
     fflush(stdout);
 
     bvh_stats_t stats;
@@ -232,12 +227,12 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
     // bvh.maxNodeCount = 2 * bvh.primitiveCount - 1;
 
     bvh.nodeCount = 0;
-    bvh.nodes.items = (bvh_node_t*)malloc(sizeof(bvh_node_t) * maxNodeCount);
+    bvh.nodes.items = (bvh_node_t *)malloc(sizeof(bvh_node_t) * maxNodeCount);
     assert(bvh.nodes.items && "malloc");
     bvh.nodes.count = maxNodeCount;
 
     // mutable primitive list for sorting faces
-    bvh.indices.items = (uint32_t*)malloc(sizeof(uint32_t) * primitiveCount);
+    bvh.indices.items = (uint32_t *)malloc(sizeof(uint32_t) * primitiveCount);
     assert(bvh.indices.items && "malloc");
     bvh.indices.count = primitiveCount;
 
@@ -245,7 +240,7 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
         bvh.indices[i] = i;
     }
     // calculate centroids, accesses work with scene face indices
-    bvh.centroids.items = (Vec3*)malloc(sizeof(Vec3) * primitiveCount);
+    bvh.centroids.items = (Vec3 *)malloc(sizeof(Vec3) * primitiveCount);
     assert(bvh.centroids.items && "malloc");
     bvh.centroids.count = primitiveCount;
 
@@ -254,7 +249,7 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
     }
 
     uint32_t rootIndex = bvh.nodeCount++;
-    bvh_node_t& root = bvh.nodes[rootIndex];
+    bvh_node_t &root = bvh.nodes[rootIndex];
     root.start = 0;
     root.end = primitiveCount;
     update_node_bounds(scene, bvh, rootIndex);
@@ -268,23 +263,24 @@ bvh_build(bvh_t& bvh, const scene_t& scene) {
     bvh.centroids.items = NULL;
 
     if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
-        printf("ERROR bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n", 
+        printf(
+            "ERROR bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n",
             stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
         exit(EXIT_FAILURE);
     }
 
-    printf("Done\n");
+    log_info("Done building BVH\n");
 }
 
-void bvh_free_host(bvh_t& h_bvh) {
+void bvh_free_host(bvh_t &h_bvh) {
     free(h_bvh.nodes.items);
     h_bvh.nodes.items = NULL;
     free(h_bvh.indices.items);
     h_bvh.indices.items = NULL;
 }
 
-void bvh_copy_device(bvh_t** d_bvh, const bvh_t* h_bvh) {
-    printf("Copying bvh_t to device... ");
+void bvh_copy_device(bvh_t **d_bvh, const bvh_t *h_bvh) {
+    log_info("Copying bvh_t to device... \n");
 
     bvh_t placeholder = *h_bvh;
 
@@ -297,11 +293,10 @@ void bvh_copy_device(bvh_t** d_bvh, const bvh_t* h_bvh) {
 
     char buf[64];
     human_readable_size(buf, totalSize);
-    printf("Done [%s]\n", buf);
+    log_info("Done [%s]\n", buf);
 }
 
-void bvh_free_device(bvh_t* d_bvh) {
-    
+void bvh_free_device(bvh_t *d_bvh) {
     bvh_t placeholder;
     copy_host_struct(&placeholder, d_bvh);
 
@@ -313,8 +308,8 @@ void bvh_free_device(bvh_t* d_bvh) {
 
 #define RAY_NO_HIT 1e30f
 
-static PLATFORM float
-intersect_aabb(const AABB& aabb, const Ray& ray, const Vec3& r_inv, float min_t) {
+static PLATFORM float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec3 &r_inv,
+                                     float min_t) {
     Vec3 t1 = (aabb.min - ray.o) * r_inv;
     Vec3 t2 = (aabb.max - ray.o) * r_inv;
     Vec3 tminv = Vec3::min(t1, t2);
@@ -330,21 +325,19 @@ intersect_aabb(const AABB& aabb, const Ray& ray, const Vec3& r_inv, float min_t)
     }
 }
 
-PLATFORM void
-bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
-                        const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit) {
-
+PLATFORM void bvh_intersect_iterative(const __restrict__ bvh_t *bvh,
+                                      const __restrict__ scene_t *scene, const Ray &ray,
+                                      intersection_t &hit) {
     Vec3 r_inv = 1.0 / ray.r;
 
-    bvh_node_t* stack[BVH_TRAVERSAL_STACK_SIZE];
+    bvh_node_t *stack[BVH_TRAVERSAL_STACK_SIZE];
     int depth = 0;
     stack[0] = &bvh->nodes.items[0];
 
     while (depth >= 0) {
-        bvh_node_t* node = stack[depth--];
+        bvh_node_t *node = stack[depth--];
 
         while (node != NULL) {
-
             if (node->end - node->start > 0) {
                 // is leaf
                 for (uint32_t i = node->start; i < node->end; i++) {
@@ -352,15 +345,14 @@ bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
                 }
                 node = NULL;
             } else {
-
-                bvh_node_t* child1 = &bvh->nodes.items[node->leftChild];
-                bvh_node_t* child2 = &bvh->nodes.items[node->rightChild];
+                bvh_node_t *child1 = &bvh->nodes.items[node->leftChild];
+                bvh_node_t *child2 = &bvh->nodes.items[node->rightChild];
 
                 float t1 = intersect_aabb(child1->bounds, ray, r_inv, hit.distance);
                 float t2 = intersect_aabb(child2->bounds, ray, r_inv, hit.distance);
 
                 if (t2 < t1) {
-                    bvh_node_t* tempc = child1;
+                    bvh_node_t *tempc = child1;
                     child1 = child2;
                     child2 = tempc;
                     float tempt = t1;
@@ -382,4 +374,3 @@ bvh_intersect_iterative(const __restrict__ bvh_t* bvh,
         }
     }
 }
-

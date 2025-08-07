@@ -1,0 +1,17 @@
+paths:
+  executable: bin/raytracer
+inputs:
+- assets/many_lights.gltf
+pathtracer:
+  logger:
+    log-level: 3
+    log-stdout: true
+  output:
+    resolution-x: 1024
+    resolution-y: 1024
+  sampling:
+    seed: 42
+    samples: 200
+    samples-every-update: 50
+  world:
+    clear-color: 0 0 0

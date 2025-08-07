@@ -4,77 +4,52 @@
 
 #include <cassert>
 
-#include "dispatch.h"
 #include "config.h"
-#include "settings.h"
+#include "dispatch.h"
+#include "headers.h"
+#include "logger.h"
 #include "lst.h"
 
-bool doVerbosePrinting = false;
+int main(int argc, char *argv[]) {
 
-void print_help(int argc, char* argv[]) {
-    fprintf(stderr, "Usage: %s [options] <path_to_gltf>\n", argv[0]);
-    fprintf(stderr, "Expects a gltf 2.0 model. Further settings can be applied in pathtracer.yaml.\n");
-    fprintf(stderr, "  -c <pathtracer.yaml>  Pathtracer render settings file.\n");
-    fprintf(stderr, "  -o <output.png>       Path to output image.\n");
-    fprintf(stderr, "  -v                    Enable verbose printing.\n");
-}
+    // printf("argc = %d\n", argc);
+    // for (int i = 0; argv[i]; i++) {
+    //     printf("argv[%d] = %s\n", i, argv[i]);
+    // }
 
-int main(int argc, char* argv[]) {
-    
-    settings_t settings;
+    config_t cfg;
 
-    char output_path[PATH_MAX];
-    strcpy(output_path, "output.png");
-
-    int opt;
-    while ((opt = getopt(argc, argv, "o:c:v")) != -1) {
-        switch (opt) {
-            case 'o':
-                strcpy(output_path, optarg);
-                break;
-            case 'c':
-                settings_parse_yaml(settings, optarg);
-                break;
-            case 'v':
-                doVerbosePrinting = true;
-                printf("Verbose printing enabled\n");
-                break;
-            default:
-                print_help(argc, argv);
-                exit(EXIT_FAILURE);
-        }
+    if (load_config(&cfg, argc, argv)) {
+        return 1;
     }
 
-    if (optind >= argc) {
-        fprintf(stderr, "Expected a path to an .obj file.\n");
-        print_help(argc, argv);
-        exit(EXIT_FAILURE);
+    path_t log_file;
+    snprintf(log_file, sizeof(log_file), "%s/log.txt", cfg.dir_output);
+    snprintf(cfg.path_render, sizeof(cfg.path_render), "%s/render.png", cfg.dir_output);
+
+    if (log_init(cfg.log_level, log_file, cfg.log_stdout)) {
+        return 1;
     }
-
-    settings_print(settings);
-
-    char* obj_file_path = argv[optind];
 
     scene_t h_scene;
-    scene_parse_gltf(h_scene, obj_file_path);
+    scene_parse_gltf(h_scene, cfg.path_gltf);
 
     // bounding volume hierarchy
     bvh_t h_bvh;
     bvh_build(h_bvh, h_scene);
-    
+
     // light source tree
     lst_t h_lst;
     lst_build(h_lst, h_scene);
 
-    size_t img_size = sizeof(Vec3) * settings.output.width * settings.output.height;
-
-    Vec3* h_img = (Vec3*)malloc(img_size);
+    size_t img_size = sizeof(Vec3) * cfg.resolution_x * cfg.resolution_y;
+    Vec3 *h_img = (Vec3 *)malloc(img_size);
     assert(h_img);
 
 #ifdef USE_CPU_RENDER
     render_image_host(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings, output_path);
 #else
-    render_image_device(&h_scene, &h_bvh, &h_lst, h_img, img_size, settings, output_path);
+    render_image_device(&h_scene, &h_bvh, &h_lst, h_img, img_size, &cfg);
 #endif
 
     free(h_img);
@@ -82,6 +57,8 @@ int main(int argc, char* argv[]) {
     bvh_free_host(h_bvh);
     lst_free_host(h_lst);
     scene_delete_host(h_scene);
+
+    log_close();
 
     return 0;
 }

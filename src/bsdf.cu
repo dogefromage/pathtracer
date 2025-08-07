@@ -177,7 +177,6 @@ sample_bsdf(bsdf_sample_t& out, const Vec3& v_inv, const intersection_t& hit, ra
 
 PLATFORM void
 evaluate_bsdf(bsdf_sample_t& out, const Vec3& v_inv, const Vec3& w, const intersection_t& hit, rand_state_t& rstate) {
-
     // // diffuse
     // out.omega_i = w;
     // out.bsdf = hit.mat->color / M_PIf;

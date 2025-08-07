@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-#include "config.h"
+#include "headers.h"
 
 typedef struct {
     curandState curand;

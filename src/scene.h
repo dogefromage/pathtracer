@@ -76,19 +76,7 @@ typedef struct {
 } temp_scene_t;
 
 void scene_parse_gltf(scene_t &scene, const char *filename);
-void scene_delete_host(scene_t& scene);
+void scene_delete_host(scene_t &scene);
 
 void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene);
 void free_device_scene(scene_t *dev_scene);
-
-
-inline void print_material(const material_t *material) {
-    printf("Material:\n");
-    printf("  Name: %s\n", material->name);
-    printf("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y, material->color.z);
-    printf("  Color alpha: %.2f\n", material->colorAlpha);
-    printf("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y, material->emissive.z);
-    printf("  Metallic: %.2f\n", material->metallic);
-    printf("  Roughness: %.2f\n", material->roughness);
-    printf("  IoR: %.2f\n", material->ior);
-}

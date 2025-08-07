@@ -5,20 +5,18 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <iostream>
 
+#include "logger.h"
 #include "tiny_gltf.h"
 #include "utils.h"
 
 using namespace tinygltf;
 
-static Vec3 parseVec3(const std::vector<double>& v) {
+static Vec3 parseVec3(const std::vector<double> &v) {
     assert(v.size() >= 3);
-    return {
-        (float)v[0],
-        (float)v[1],
-        (float)v[2]};
+    return {(float)v[0], (float)v[1], (float)v[2]};
 }
 
-static Mat4 getForwardTransform(const Node& node) {
+static Mat4 getForwardTransform(const Node &node) {
     if (node.matrix.size()) {
         // matrix is in column major order
 
@@ -42,11 +40,8 @@ static Mat4 getForwardTransform(const Node& node) {
         float m23 = node.matrix[14];
         float m33 = node.matrix[15];
 
-        return Mat4(
-            m00, m01, m02, m03,
-            m10, m11, m12, m13,
-            m20, m21, m22, m23,
-            m30, m31, m32, m33);
+        return Mat4(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32,
+                    m33);
     }
 
     Mat4 forward = Mat4::Identity();
@@ -55,11 +50,7 @@ static Mat4 getForwardTransform(const Node& node) {
         float sx = node.scale[0];
         float sy = node.scale[1];
         float sz = node.scale[2];
-        Mat4 scale = Mat4(
-            sx, 0, 0, 0,
-            0, sy, 0, 0,
-            0, 0, sz, 0,
-            0, 0, 0, 1);
+        Mat4 scale = Mat4(sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1);
         forward = scale * forward;
     }
 
@@ -71,7 +62,7 @@ static Mat4 getForwardTransform(const Node& node) {
         float qk = node.rotation[2];
         float qr = node.rotation[3];
 
-        float s = 1;  // s = 1/norm(Q) ASSUME NORMALIZED QUATERNION IDK
+        float s = 1; // s = 1/norm(Q) ASSUME NORMALIZED QUATERNION IDK
 
         float m00 = 1 - 2 * s * (qj * qj + qk * qk);
         float m01 = 2 * s * (qi * qj - qk * qr);
@@ -85,11 +76,7 @@ static Mat4 getForwardTransform(const Node& node) {
         float m21 = 2 * s * (qj * qk + qi * qr);
         float m22 = 1 - 2 * s * (qi * qi + qj * qj);
 
-        Mat4 rotation = Mat4(
-            m00, m01, m02, 0,
-            m10, m11, m12, 0,
-            m20, m21, m22, 0,
-            0, 0, 0, 1);
+        Mat4 rotation = Mat4(m00, m01, m02, 0, m10, m11, m12, 0, m20, m21, m22, 0, 0, 0, 0, 1);
         forward = rotation * forward;
     }
 
@@ -98,21 +85,16 @@ static Mat4 getForwardTransform(const Node& node) {
         float ty = node.translation[1];
         float tz = node.translation[2];
 
-        Mat4 translation = Mat4(
-            1, 0, 0, tx,
-            0, 1, 0, ty,
-            0, 0, 1, tz,
-            0, 0, 0, 1);
+        Mat4 translation = Mat4(1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz, 0, 0, 0, 1);
         forward = translation * forward;
     }
 
     return forward;
 }
 
-static void
-scene_parse_camera(temp_scene_t& scene, const Model& model,
-                   const Node& node, const Mat4& modelTransform) {
-    const Camera& cam = model.cameras[node.camera];
+static void scene_parse_camera(temp_scene_t &scene, const Model &model, const Node &node,
+                               const Mat4 &modelTransform) {
+    const Camera &cam = model.cameras[node.camera];
 
     if (cam.type != "perspective") {
         printf("unsupported camera type: %s\n", cam.type.c_str());
@@ -130,10 +112,9 @@ scene_parse_camera(temp_scene_t& scene, const Model& model,
     scene.camera.updir = updir.dehomogenise() - scene.camera.position;
 }
 
-static void
-scene_parse_light(temp_scene_t& scene, const Model& model,
-                  const Node& node, const Mat4& modelTransform) {
-    const Light& modelLight = model.lights[node.light];
+static void scene_parse_light(temp_scene_t &scene, const Model &model, const Node &node,
+                              const Mat4 &modelTransform) {
+    const Light &modelLight = model.lights[node.light];
 
     light_t light;
 
@@ -167,19 +148,30 @@ scene_parse_light(temp_scene_t& scene, const Model& model,
     scene.lights.push_back(light);
 }
 
-static uint32_t
-scene_parse_material(temp_scene_t& scene, const Model& model, int materialIndex) {
+static void print_material(const material_t *material) {
+    log_trace("Material:\n");
+    log_trace("  Name: %s\n", material->name);
+    log_trace("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y,
+              material->color.z);
+    log_trace("  Color alpha: %.2f\n", material->colorAlpha);
+    log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
+              material->emissive.z);
+    log_trace("  Metallic: %.2f\n", material->metallic);
+    log_trace("  Roughness: %.2f\n", material->roughness);
+    log_trace("  IoR: %.2f\n", material->ior);
+}
+
+static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
+                                     int materialIndex) {
     auto previousMatIndex = scene.materialMapping.find(materialIndex);
     if (previousMatIndex != scene.materialMapping.end()) {
         return previousMatIndex->second;
     }
 
-    const Material& sceneMat = model.materials[materialIndex];
+    const Material &sceneMat = model.materials[materialIndex];
     material_t mat;
 
-    if (doVerbosePrinting) {
-        printf("Material: %s\n", sceneMat.name.c_str());
-    }
+    log_trace("Material: %s\n", sceneMat.name.c_str());
 
     strncpy(mat.name, sceneMat.name.c_str(), MATERIAL_NAME_SIZE - 1);
     mat.name[MATERIAL_NAME_SIZE - 1] = '\0';
@@ -188,9 +180,10 @@ scene_parse_material(temp_scene_t& scene, const Model& model, int materialIndex)
 
     float emissiveStrength = 0;
 
-    for (const auto& extension : sceneMat.extensions) {
+    for (const auto &extension : sceneMat.extensions) {
         if (extension.first == "KHR_materials_emissive_strength") {
-            emissiveStrength = (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
+            emissiveStrength =
+                (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
         } else {
             printf("Unknown extension: %s\n", extension.first.c_str());
         }
@@ -203,7 +196,7 @@ scene_parse_material(temp_scene_t& scene, const Model& model, int materialIndex)
     mat.metallic = (float)sceneMat.pbrMetallicRoughness.metallicFactor;
     mat.roughness = (float)sceneMat.pbrMetallicRoughness.roughnessFactor;
 
-    mat.ior = 1.33;  // TODO
+    mat.ior = 1.33; // TODO
 
     mat.emissive = emissiveStrength * parseVec3(sceneMat.emissiveFactor);
 
@@ -213,18 +206,15 @@ scene_parse_material(temp_scene_t& scene, const Model& model, int materialIndex)
     scene.materials.push_back(mat);
     scene.materialMapping[materialIndex] = newIndex;
 
-    if (doVerbosePrinting) {
-        print_material(&mat);
-    }
+    print_material(&mat);
 
     return newIndex;
 }
 
-static void
-scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) {
-    const Accessor& acc = model.accessors[accIndex];
-    const BufferView& bufView = model.bufferViews[acc.bufferView];
-    const Buffer& buf = model.buffers[bufView.buffer];
+static void scene_parse_acc_vec3(std::vector<Vec3> &list, const Model &model, int accIndex) {
+    const Accessor &acc = model.accessors[accIndex];
+    const BufferView &bufView = model.bufferViews[acc.bufferView];
+    const Buffer &buf = model.buffers[bufView.buffer];
 
     AABB actualBounds;
     AABB givenBounds;
@@ -232,11 +222,13 @@ scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) 
 
     if (acc.maxValues.size() && acc.maxValues.size()) {
         hasGivenBounds = true;
-        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1], (float)acc.minValues[2]};
-        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1], (float)acc.maxValues[2]};
+        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1],
+                           (float)acc.minValues[2]};
+        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1],
+                           (float)acc.maxValues[2]};
     }
 
-    assert(!acc.sparse.isSparse && "sparse mesh unsupported");  // TODO maybe
+    assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
 
     int byteStride = acc.ByteStride(bufView);
 
@@ -244,7 +236,7 @@ scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) 
         // https://github.com/syoyo/tinygltf/wiki/Accessing-vertex-data
 
         size_t byteNumber = acc.byteOffset + bufView.byteOffset + byteStride * i;
-        const float* item = reinterpret_cast<const float*>(&buf.data[byteNumber]);
+        const float *item = reinterpret_cast<const float *>(&buf.data[byteNumber]);
 
         Vec3 v = {item[0], item[1], item[2]};
         // v.print();
@@ -258,20 +250,19 @@ scene_parse_acc_vec3(std::vector<Vec3>& list, const Model& model, int accIndex) 
         }
     }
 
-    if (doVerbosePrinting) {
-        printf("%lu vec3 parsed in given min and max:\n", acc.count);
-        actualBounds.min.print();
-        actualBounds.max.print();
-    }
+    // char s_min[64], s_max[64];
+    // actualBounds.min.snprint(s_min, 64);
+    // actualBounds.max.snprint(s_max, 64);
+    // log_trace("%lu vec3 parsed in given min and max:\n", acc.count);
 }
 
-static void
-scene_parse_acc_indices(std::vector<uint32_t>& list, const Model& model, int accIndex) {
-    const Accessor& acc = model.accessors[accIndex];
-    const BufferView& bufView = model.bufferViews[acc.bufferView];
-    const Buffer& buf = model.buffers[bufView.buffer];
+static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &model,
+                                    int accIndex) {
+    const Accessor &acc = model.accessors[accIndex];
+    const BufferView &bufView = model.bufferViews[acc.bufferView];
+    const Buffer &buf = model.buffers[bufView.buffer];
 
-    assert(!acc.sparse.isSparse && "sparse mesh unsupported");  // TODO maybe
+    assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
 
     int byteStride = acc.ByteStride(bufView);
 
@@ -289,16 +280,16 @@ scene_parse_acc_indices(std::vector<uint32_t>& list, const Model& model, int acc
         int index;
 
         switch (acc.componentType) {
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                index = (int)*reinterpret_cast<const uint16_t*>(&buf.data[byteNumber]);
-                break;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                index = (int)*reinterpret_cast<const uint32_t*>(&buf.data[byteNumber]);
-                break;
-            default:
-                printf("Component type not implemented: %d\n", acc.componentType);
-                exit(EXIT_FAILURE);
-                break;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+            index = (int)*reinterpret_cast<const uint16_t *>(&buf.data[byteNumber]);
+            break;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+            index = (int)*reinterpret_cast<const uint32_t *>(&buf.data[byteNumber]);
+            break;
+        default:
+            printf("Component type not implemented: %d\n", acc.componentType);
+            exit(EXIT_FAILURE);
+            break;
         }
 
         min = std::min(min, index);
@@ -308,39 +299,36 @@ scene_parse_acc_indices(std::vector<uint32_t>& list, const Model& model, int acc
         list.push_back(index);
     }
 
-    if (doVerbosePrinting) {
-        printf("Indices scanned in range [%d, %d]\n", min, max);
-    }
+    log_trace("Indices scanned in range [%d, %d]\n", min, max);
 }
 
-static void
-scene_parse_mesh(temp_scene_t& scene, const Model& model,
-                 const Node& node, const Mat4& modelTransform) {
-    doVerbosePrinting&& printf("Parsing mesh of %s\n", node.name.c_str());
+static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node &node,
+                             const Mat4 &modelTransform) {
+    log_trace("Parsing mesh of %s\n", node.name.c_str());
 
-    const Mesh& mesh = model.meshes[node.mesh];
+    const Mesh &mesh = model.meshes[node.mesh];
     Mat3 linearModelTransform = modelTransform.getLinearPart();
 
-    for (const Primitive& prim : mesh.primitives) {
+    for (const Primitive &prim : mesh.primitives) {
         int newMatIndex = scene_parse_material(scene, model, prim.material);
 
         std::vector<Vec3> positions;
         std::vector<Vec3> normals;
         std::vector<uint32_t> indices;
 
-        for (const auto& attr : prim.attributes) {
+        for (const auto &attr : prim.attributes) {
             if (attr.first == "POSITION") {
-                doVerbosePrinting&& printf("Scanning POSITION\n");
+                log_trace("Scanning POSITION\n");
                 scene_parse_acc_vec3(positions, model, attr.second);
             } else if (attr.first == "NORMAL") {
-                doVerbosePrinting&& printf("Scanning NORMAL\n");
+                log_trace("Scanning NORMAL\n");
                 scene_parse_acc_vec3(normals, model, attr.second);
             } else {
-                printf("WARNING: skipped unsupported attribute '%s'\n", attr.first.c_str());
+                log_warning("skipped unsupported attribute '%s'\n", attr.first.c_str());
             }
         }
 
-        doVerbosePrinting&& printf("Scanning INDICES\n");
+        log_trace("Scanning INDICES\n");
         scene_parse_acc_indices(indices, model, prim.indices);
 
         int vertCount = positions.size();
@@ -384,9 +372,9 @@ scene_parse_mesh(temp_scene_t& scene, const Model& model,
 
                 // compute right handed flat normals
                 // world space -> does not need transform
-                const Vec3& A = scene.vertices[face.vertices[0]].position;
-                const Vec3& B = scene.vertices[face.vertices[1]].position;
-                const Vec3& C = scene.vertices[face.vertices[2]].position;
+                const Vec3 &A = scene.vertices[face.vertices[0]].position;
+                const Vec3 &B = scene.vertices[face.vertices[1]].position;
+                const Vec3 &C = scene.vertices[face.vertices[2]].position;
 
                 face.faceNormal = (B - A).cross(C - A).normalized();
             }
@@ -396,8 +384,8 @@ scene_parse_mesh(temp_scene_t& scene, const Model& model,
     }
 }
 
-static void
-scene_parse_node(temp_scene_t& scene, const Model& model, const Node& node, Mat4 parentTransform) {
+static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node &node,
+                             Mat4 parentTransform) {
     Mat4 nodeForwardTransform = getForwardTransform(node);
     Mat4 modelTransform = parentTransform * nodeForwardTransform;
 
@@ -411,13 +399,15 @@ scene_parse_node(temp_scene_t& scene, const Model& model, const Node& node, Mat4
         scene_parse_mesh(scene, model, node, modelTransform);
     }
 
-    for (const int& childIndex : node.children) {
-        const Node& child = model.nodes[childIndex];
+    for (const int &childIndex : node.children) {
+        const Node &child = model.nodes[childIndex];
         scene_parse_node(scene, model, child, modelTransform);
     }
 }
 
-void scene_parse_gltf(scene_t& finalScene, const char* filename) {
+void scene_parse_gltf(scene_t &finalScene, const char *filename) {
+    log_info("Parsing .gltf... \n");
+
     Model model;
     TinyGLTF loader;
     std::string err;
@@ -426,22 +416,22 @@ void scene_parse_gltf(scene_t& finalScene, const char* filename) {
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
 
     if (!warn.empty()) {
-        fprintf(stderr, "TinyGLTF WARNING: %s\n", warn.c_str());
+        log_warning("TinyGLTF WARNING: %s\n", warn.c_str());
     }
     if (!err.empty()) {
-        fprintf(stderr, "TinyGLTF ERROR: %s\n", err.c_str());
+        log_error("TinyGLTF ERROR: %s\n", err.c_str());
     }
     if (!ret) {
-        fprintf(stderr, "Failed to parse glTF\n");
+        log_error("Failed to parse glTF\n");
         exit(EXIT_FAILURE);
     }
 
     temp_scene_t tempScene;
 
-    Scene& modelScene = model.scenes[model.defaultScene];
+    Scene &modelScene = model.scenes[model.defaultScene];
 
-    for (const int& nodeIndex : modelScene.nodes) {
-        const Node& node = model.nodes[nodeIndex];
+    for (const int &nodeIndex : modelScene.nodes) {
+        const Node &node = model.nodes[nodeIndex];
         scene_parse_node(tempScene, model, node, Mat4::Identity());
     }
 
@@ -452,9 +442,11 @@ void scene_parse_gltf(scene_t& finalScene, const char* filename) {
     fixed_array_from_vector(finalScene.faces, tempScene.faces);
     fixed_array_from_vector(finalScene.materials, tempScene.materials);
     fixed_array_from_vector(finalScene.lights, tempScene.lights);
+
+    log_info("Done parsing .gltf\n");
 }
 
-void scene_delete_host(scene_t& scene) {
+void scene_delete_host(scene_t &scene) {
     free(scene.vertices.items);
     scene.vertices.items = NULL;
 
@@ -468,8 +460,8 @@ void scene_delete_host(scene_t& scene) {
     scene.lights.items = NULL;
 }
 
-void scene_copy_to_device(scene_t** dev_scene, scene_t* host_scene) {
-    printf("Copying scene to device... ");
+void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene) {
+    log_info("Copying scene to device... \n");
 
     scene_t placeholder = *host_scene;
     size_t totalSize = 0;
@@ -483,10 +475,10 @@ void scene_copy_to_device(scene_t** dev_scene, scene_t* host_scene) {
 
     char buf[64];
     human_readable_size(buf, totalSize);
-    printf("Done [%s]\n", buf);
+    log_info("Done [%s]\n", buf);
 }
 
-void free_device_scene(scene_t* dev_scene) {
+void free_device_scene(scene_t *dev_scene) {
     scene_t placeholder;
     copy_host_struct(&placeholder, dev_scene);
 

@@ -1,14 +1,20 @@
 #pragma once
+#include <cstdint>
 
-// #define USE_INTERSECT_CRUDE
-// #define USE_CPU_RENDER
+#include "config.h"
+#include "mathops.h"
 
-extern bool doVerbosePrinting;
+typedef char path_t[256];
 
-#define BVH_TRAVERSAL_STACK_SIZE 64
+struct config_t {
+    int resolution_x, resolution_y;
+    int samples, seed, samples_every_update;
 
-#ifdef USE_CPU_RENDER
-#define PLATFORM __host__
-#else
-#define PLATFORM __device__
-#endif
+    Vec3 world_clear_color;
+
+    int log_level, log_stdout;
+
+    path_t path_gltf, dir_output, path_render;
+};
+
+int load_config(config_t* cfg, int argc, char* argv[]);

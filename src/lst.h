@@ -1,8 +1,9 @@
 #pragma once
 #include <cstdint>
+
 #include "mathops.h"
-#include "scene.h"
 #include "random.h"
+#include "scene.h"
 
 enum lst_source_type {
     LST_SOURCE_FACE,

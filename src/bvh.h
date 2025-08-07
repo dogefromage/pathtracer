@@ -14,7 +14,7 @@ typedef struct {
     fixed_array<bvh_node_t> nodes;
     fixed_array<uint32_t> indices;
     fixed_array<Vec3> centroids;
-    uint32_t nodeCount; //, maxNodeCount, primitiveCount;
+    uint32_t nodeCount;  //, maxNodeCount, primitiveCount;
 } bvh_t;
 
 typedef struct {

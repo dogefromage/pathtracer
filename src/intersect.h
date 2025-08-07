@@ -1,6 +1,6 @@
 #pragma once
+#include "headers.h"
 #include "mathops.h"
-#include "config.h"
 #include "scene.h"
 
 #define CLEAR_DISTANCE 1e30
@@ -18,8 +18,8 @@ struct intersection_t {
     const material_t* mat;
 };
 
-PLATFORM void 
+PLATFORM void
 intersect_face(const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit, int faceIndex);
 
-PLATFORM void 
+PLATFORM void
 intersect_crude(const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit);

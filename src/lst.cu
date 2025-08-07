@@ -1,52 +1,47 @@
+#include "logger.h"
 #include "lst.h"
-#include <vector>
 #include "utils.h"
+#include <vector>
 
-void lst_build(lst_t& lst, const scene_t& scene) {
-    printf("Building lst_t...  ");
+void lst_build(lst_t &lst, const scene_t &scene) {
+    log_info("Building LST... \n");
 
     std::vector<lst_node_t> lss;
-    
+
     for (uint32_t i = 0; i < scene.faces.count; i++) {
-        const face_t& face = scene.faces[i];
+        const face_t &face = scene.faces[i];
         // check if emissive
-        const material_t& mat = scene.materials[face.material];
+        const material_t &mat = scene.materials[face.material];
         if (mat.emissive.maxComponent() > 0) {
             // face is emissive
-            lss.push_back({ 
-                type: LST_SOURCE_FACE,
-                index: i
-            });
+            lss.push_back({type : LST_SOURCE_FACE, index : i});
         }
     }
 
     for (uint32_t i = 0; i < scene.lights.count; i++) {
         // const light_t& light = scene.lights[i];
-        lss.push_back({
-            type: LST_SOURCE_LIGHT,
-            index: i
-        });
+        lss.push_back({type : LST_SOURCE_LIGHT, index : i});
     }
 
     // fixed_array_from_vector(lst.nodes, lss);
     lst.nodes.count = lss.size();
-    lst.nodes.items = (lst_node_t*)malloc(sizeof(lst_node_t) * lst.nodes.count);
+    lst.nodes.items = (lst_node_t *)malloc(sizeof(lst_node_t) * lst.nodes.count);
     std::copy(lss.begin(), lss.end(), lst.nodes.items);
 
-    printf("Done\n");
+    log_info("Done building LST\n");
 
     if (lst.nodes.count == 0) {
-        printf("Warning! No lights found in scene.\n");
+        log_warning("No lights found in scene.\n");
     }
 }
 
-void lst_free_host(lst_t& lst) {
+void lst_free_host(lst_t &lst) {
     free(lst.nodes.items);
     lst.nodes.items = NULL;
 }
 
-void lst_copy_device(lst_t** d_lst, const lst_t* h_lst) {
-    printf("Copying lst_t to device... ");
+void lst_copy_device(lst_t **d_lst, const lst_t *h_lst) {
+    log_info("Copying lst_t to device... \n");
 
     lst_t placeholder = *h_lst;
     size_t totalSize = 0;
@@ -56,10 +51,10 @@ void lst_copy_device(lst_t** d_lst, const lst_t* h_lst) {
 
     char buf[64];
     human_readable_size(buf, totalSize);
-    printf("Done [%s]\n", buf);
+    log_info("Done [%s]\n", buf);
 }
 
-void lst_free_device(lst_t* d_lst) {
+void lst_free_device(lst_t *d_lst) {
     lst_t placeholder;
     copy_host_struct(&placeholder, d_lst);
 
@@ -67,21 +62,23 @@ void lst_free_device(lst_t* d_lst) {
     device_free(d_lst);
 }
 
-
 // PLATFORM void
-// lst_sample_point_light(light_sample_t& sample, const light_t& light, const scene_t* scene, rand_state_t& rstate) {
+// lst_sample_point_light(light_sample_t& sample, const light_t& light, const scene_t* scene,
+// rand_state_t& rstate) {
 //     sample.p = 1;
 //     sample.position = light.position;
 //     sample.light = light.color * light.intensity;
 // }
 
 // PLATFORM void
-// lst_sample_directional_light(light_sample_t& sample, const light_t& light, const scene_t* scene, rand_state_t& rstate) {
+// lst_sample_directional_light(light_sample_t& sample, const light_t& light, const scene_t*
+// scene, rand_state_t& rstate) {
 //     assert(false);
 // }
 
 // PLATFORM void
-// lst_sample(light_sample_t& sample, const lst_t* lst, const scene_t* scene, rand_state_t& rstate) {
+// lst_sample(light_sample_t& sample, const lst_t* lst, const scene_t* scene, rand_state_t&
+// rstate) {
 //     // if (!lst->nodes.count) {
 //     //     sample.p = 0;
 //     //     return;
@@ -96,7 +93,7 @@ void lst_free_device(lst_t* d_lst) {
 //     // }
 //     // if (node.type == LST_SOURCE_LIGHT) {
 //     //     const light_t& light = scene->lights[node.index];
-        
+
 //     //     switch (light.type) {
 //     //         case LIGHT_POINT:
 //     //             lst_sample_point_light(sample, light, scene, rstate);
@@ -108,7 +105,6 @@ void lst_free_device(lst_t* d_lst) {
 //     //             assert(false);
 //     //             break;
 //     //     }
-
 
 //     // }
 // }

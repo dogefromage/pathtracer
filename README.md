@@ -2,54 +2,75 @@
 
 Started out as a small project over the break and has spiraled out of control over time. Runs on cuda-12.5.
 
-Usage:
-- Build the program using ```make``` (requires cuda compiler)
-- The output will be placed in the ```./bin``` folder
-- Test by writing ```./bin/raytracer -c pathtracer.yaml gltf/bust.gltf ```
-- The output will be rendered to ```./output.png```
+## Installation
 
-```sh
-# usage:
-Usage: ./bin/raytracer [options] <path_to_gltf>
-Expects a gltf 2.0 model. Further settings can be applied in pathtracer.yaml.
-  -c <pathtracer.yaml>  Pathtracer render settings file.
-  -o <output.png>       Path to output image.
-  -v                    Enable verbose printing.
+Requirements: conda or miniconda, CUDA (tested on 12.8)
 
-# pathtracer.yaml layout:
-TODO
+```bash
+cd pathtracer/
 
-# example output:
-Parsing assets/spheres.gltf... Done 
-Building bvh_t... [Done]
-Copying scene to device... Done [105kB]
-Copying bvh_t to device... Done [86kB]
-Launching kernel... 
-Rendering 300 samples in batches of 10, img size (1600, 1600)
-Kernel params <<<(100,100), (16,16)>>>
-Rendered 10 / 300 samples in 0.3s - 35.59 samples/s - 12.81 MPS/s
-Rendered 20 / 300 samples in 0.4s - 45.25 samples/s - 16.29 MPS/s
-Rendered 30 / 300 samples in 0.6s - 52.17 samples/s - 18.78 MPS/s
-Rendered 40 / 300 samples in 0.7s - 56.58 samples/s - 20.37 MPS/s
-Rendered 50 / 300 samples in 0.8s - 59.74 samples/s - 21.51 MPS/s
-Rendered 60 / 300 samples in 1.0s - 61.98 samples/s - 22.31 MPS/s
-Rendered 70 / 300 samples in 1.1s - 63.64 samples/s - 22.91 MPS/s
-Rendered 80 / 300 samples in 1.2s - 64.99 samples/s - 23.40 MPS/s
-...
+# python setup
+conda env create -f environment.yml
+
+# compile project
+make
 ```
 
-![Latest render](/output.png)
+## Usage
+
+```bash
+# cwd must be project root
+python client/main.py config=client/configs/base.yml
+```
+
+## Example output
+
+```
+bin/raytracer
+  --path-gltf assets/many_lights.gltf
+  --dir-output output/20250808_004357/many_lights
+  --output-resolution-x 1024
+  --output-resolution-y 1024
+  --sampling-samples 200
+  --sampling-samples-every-update 50
+  --sampling-seed 42
+  --logger-log-stdout 1
+  --logger-log-level 3
+  --world-clear-color "0 0 0"
+
+[INFO] Parsing .gltf... 
+[INFO] Done parsing .gltf
+[INFO] Building BVH...  
+[INFO] Done building BVH
+[INFO] Building LST... 
+[INFO] Done building LST
+[INFO] Copying scene to device... 
+[INFO] Done [15MB]
+[INFO] Copying bvh_t to device... 
+[INFO] Done [27MB]
+[INFO] Copying lst_t to device... 
+[INFO] Done [48B]
+[INFO] Launching kernel... 
+[INFO] Rendering 200 samples in batches of 50, img size (1024, 1024)
+[INFO] Kernel params <<<(64,64), (16,16)>>>
+[INFO] Rendered 50 out of 200 S/px in 8.4s - 5.93 S/px/s - 6.22 MS/s
+[INFO] Rendered 100 out of 200 S/px in 16.9s - 5.92 S/px/s - 6.21 MS/s
+[INFO] Rendered 150 out of 200 S/px in 25.3s - 5.92 S/px/s - 6.21 MS/s
+[INFO] Rendered 200 out of 200 S/px in 33.8s - 5.91 S/px/s - 6.20 MS/s
+```
+
+![Latest render](/example_output/20250808_004357/many_lights/render.png)
 
 ## Currently implements:
 * basic path tracing on gpu using CUDA or optionally using CPU
-* handles large scenes thanks to BVH spacial acceleration structure
+* handles large scenes thanks to BVH spatial acceleration structure
 * BSDF global illumination and transmission
 * rendering to .png image
 * BVH construction on CPU with surface area heuristic
+* basic light source sampling
 
 ## TODO:
 * more materials / principled bsdf
-* light source sampling
 
 ## Used sources and useful stuff
 

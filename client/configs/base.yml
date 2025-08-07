@@ -1,0 +1,36 @@
+
+paths:
+  executable: bin/raytracer
+
+inputs:
+  # - assets/dragon.gltf
+  # - assets/bust.gltf
+  # - assets/single_light.gltf
+  # - assets/glass_mirror.gltf
+  # - assets/cornell.gltf
+  # - assets/two_lights.gltf
+  - assets/many_lights.gltf
+
+pathtracer:
+
+  logger:
+    #define LOG_LEVEL_NONE 0
+    #define LOG_LEVEL_ERROR 1
+    #define LOG_LEVEL_WARNING 2
+    #define LOG_LEVEL_INFO 3
+    #define LOG_LEVEL_TRACE 4
+    log-level: 3
+    log-stdout: True
+
+  output:
+    resolution-x: 1024
+    resolution-y: 1024
+
+  sampling:
+    seed: 42
+    samples: 200
+    samples-every-update: 50
+
+  world:
+    clear-color: 0 0 0
+    # clear-color: 0.509 0.607 0.768

@@ -8,7 +8,7 @@
 #include <ostream>
 #include <vector>
 
-#include "config.h"
+#include "headers.h"
 
 #define TEST(x) (x)
 // #define TEST(x) test_finite(x)
@@ -74,6 +74,10 @@ struct Vec3 {
 
     MATH_PLATFORM void set(float a) {
         x = y = z = a;
+    }
+
+    MATH_PLATFORM void snprint(char* buffer, int n) {
+        snprintf(buffer, n, "(%.2f, %.2f, %.2f)\n", x, y, z);
     }
 
     MATH_PLATFORM void print() const {
