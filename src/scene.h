@@ -33,7 +33,7 @@ typedef struct {
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
     Vec3 color, emissive;
-    float metallic, roughness, ior, colorAlpha;
+    float metallic, roughness, ior, transmission;
 } material_t;
 
 enum light_type_t {

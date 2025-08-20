@@ -3,13 +3,13 @@ paths:
   executable: bin/raytracer
 
 inputs:
-  # - assets/dragon.gltf
-  # - assets/bust.gltf
-  # - assets/single_light.gltf
+  - assets/dragon.gltf
+  - assets/bust.gltf
+  - assets/single_light.gltf
   - assets/glass_mirror.gltf
-  # - assets/cornell.gltf
-  # - assets/two_lights.gltf
-  # - assets/many_lights.gltf
+  - assets/cornell.gltf
+  - assets/two_lights.gltf
+  - assets/many_lights.gltf
 
 pathtracer:
 
@@ -23,12 +23,15 @@ pathtracer:
     log-stdout: True
 
   output:
+    # resolution-x: 2000
+    # resolution-y: 2000
     resolution-x: 1024
     resolution-y: 1024
 
   sampling:
     seed: 42
     samples: 200
+    # samples: 400
     samples-every-update: 50
 
   world:

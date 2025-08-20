@@ -98,15 +98,15 @@ static PLATFORM Vec3 refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
 
 static PLATFORM void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv,
                                         const intersection_t &hit, rand_state_t &rstate) {
-    out.omega_i = reflect(hit.lightingNormal, v_inv);
+    out.omega_i = reflect(hit.incident_normal, v_inv);
     out.prob_i = 1.0;
-    float cos_theta = out.omega_i.dot(hit.lightingNormal);
+    float cos_theta = out.omega_i.dot(hit.incident_normal);
     out.bsdf.set(1.0 / cos_theta);
 }
 
 static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
                                        const intersection_t &hit, rand_state_t &rstate) {
-    bool isBackface = v_inv.dot(hit.trueNormal) > 0;
+    bool isBackface = v_inv.dot(hit.true_normal) > 0;
 
     float n1 = 1.0;
     float n2 = hit.mat->ior;
@@ -116,7 +116,7 @@ static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
         n2 = temp;
     }
 
-    float R = fresnel_reflect_amount(n1, n2, hit.lightingNormal, v_inv);
+    float R = fresnel_reflect_amount(n1, n2, hit.incident_normal, v_inv);
 
     bool isReflecting = random_uniform(rstate) < R;
     if (isReflecting) {
@@ -127,9 +127,9 @@ static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
 
     } else {
         // REFRACTION
-        out.omega_i = refract(n1, n2, hit.lightingNormal, v_inv);
+        out.omega_i = refract(n1, n2, hit.incident_normal, v_inv);
         out.prob_i = 1 - R;
-        float cos_theta = std::abs(out.omega_i.dot(hit.lightingNormal));
+        float cos_theta = std::abs(out.omega_i.dot(hit.incident_normal));
         out.bsdf.set((1 - R) / cos_theta);
     }
 }
@@ -137,27 +137,27 @@ static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
 PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
                           rand_state_t &rstate) {
     // bool isGlass = false;
-    bool isGlass = hit.mat->colorAlpha <= 0.01;
+    bool isGlass = hit.mat->transmission >= 0.9;
     if (isGlass) {
         sample_bsdf_glass(out, v_inv, hit, rstate);
         return;
     }
 
     // bool isMirror = false;
-    bool isMirror = hit.mat->metallic >= 0.99;
+    bool isMirror = hit.mat->metallic >= 0.9;
     if (isMirror) {
         sample_bsdf_mirror(out, v_inv, hit, rstate);
         return;
     }
 
     // // diffuse
-    // sample_t sample = hemi_sample_cosine(hit.lightingNormal, rstate);
+    // sample_t sample = hemi_sample_cosine(hit.incident_normal, rstate);
     // out.omega_i = sample.v;
     // out.bsdf = hit.mat->color / M_PIf;
     // out.prob_i = sample.p;
 
     // diffuse
-    out.omega_i = hemi_sample_uniform(hit.lightingNormal, rstate);
+    out.omega_i = hemi_sample_uniform(hit.incident_normal, rstate);
     out.bsdf = hit.mat->color / M_PIf;
     out.prob_i = 1.0 / (2 * M_PIf);
 
@@ -174,49 +174,23 @@ PLATFORM void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 &w
     out.omega_i = w;
 
     // bool isGlass = false;
-    bool isGlass = hit.mat->colorAlpha <= 0.01;
+    bool isGlass = hit.mat->transmission >= 0.9;
     if (isGlass) {
-
-        bool isBackface = v_inv.dot(hit.trueNormal) > 0;
-
-        float n1 = 1.0;
-        float n2 = hit.mat->ior;
-        if (isBackface) {
-            float temp = n1;
-            n1 = n2;
-            n2 = temp;
-        }
-
-        float R = fresnel_reflect_amount(n1, n2, hit.lightingNormal, v_inv);
-
-        bool isReflecting = hit.trueNormal.dot(v_inv) * hit.trueNormal.dot(w) < 0;
-        if (isReflecting) {
-            sample_bsdf_mirror(out, v_inv, hit, rstate);
-            out.prob_i *= R;
-            out.bsdf *= R;
-            return;
-
-        } else {
-            // REFRACTION
-            out.omega_i = refract(n1, n2, hit.lightingNormal, v_inv);
-            out.prob_i = 1 - R;
-            float cos_theta = std::abs(out.omega_i.dot(hit.lightingNormal));
-            out.bsdf.set((1 - R) / cos_theta);
-        }
-
-        return;
+        out.bsdf.set(0);
+        out.prob_i = 0;
     }
 
-    // bool isMirror = false;
-    bool isMirror = hit.mat->metallic >= 0.99;
+    bool isMirror = hit.mat->metallic >= 0.9;
     if (isMirror) {
-        sample_bsdf_mirror(out, v_inv, hit, rstate);
+        // probability is zero since mirror does not allow direct light
+        out.bsdf.set(0);
+        out.prob_i = 0;
         return;
     }
     // // diffuse
     // out.omega_i = w;
     // out.bsdf = hit.mat->color / M_PIf;
-    // out.prob_i = std::abs(hit.trueNormal.dot(w));
+    // out.prob_i = std::abs(hit.true_normal.dot(w));
 
     // diffuse
     out.bsdf = hit.mat->color / M_PIf;

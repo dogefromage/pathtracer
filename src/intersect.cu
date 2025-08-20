@@ -7,17 +7,16 @@
 //     vec3_add(out, ray->o, out);
 // }
 
-static PLATFORM Vec3 barycentric_lincom(
-    const Vec3& A, const Vec3& B, const Vec3& C,
-    float t, float u, float v) {
+static PLATFORM Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t,
+                                        float u, float v) {
     return t * A + u * B + v * C;
 }
 
 #define TRIANGLE_DETERMINANT_EPS 1e-12
 #define TRIANGLE_MARGIN_EPS 1e-12
-static PLATFORM int
-moeller_trumbore_intersect(const Ray& ray,
-                           const Vec3& vert0, const Vec3& vert1, const Vec3& vert2, float* t, float* u, float* v) {
+static PLATFORM int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0,
+                                               const Vec3 &vert1, const Vec3 &vert2, float *t,
+                                               float *u, float *v) {
     Vec3 edge1, edge2, tvec, pvec, qvec;
     float det, inv_det;
 
@@ -86,19 +85,18 @@ moeller_trumbore_intersect(const Ray& ray,
     return 1;
 }
 
-PLATFORM void
-intersect_face(const __restrict__ scene_t* scene,
-               const Ray& ray, intersection_t& hit, int faceIndex) {
-    const face_t& face = scene->faces[faceIndex];
+PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
+                             intersection_t &hit, int faceIndex) {
+    const face_t &face = scene->faces[faceIndex];
 
     // loop over n-gon triangles fan-style
     for (size_t i = 2; i < face.vertexCount; i++) {
-        const uint32_t& b = face.vertices[i - 1];
-        const uint32_t& a = face.vertices[0];
-        const uint32_t& c = face.vertices[i];
-        const Vec3& A = scene->vertices[a].position;
-        const Vec3& B = scene->vertices[b].position;
-        const Vec3& C = scene->vertices[c].position;
+        const uint32_t &b = face.vertices[i - 1];
+        const uint32_t &a = face.vertices[0];
+        const uint32_t &c = face.vertices[i];
+        const Vec3 &A = scene->vertices[a].position;
+        const Vec3 &B = scene->vertices[b].position;
+        const Vec3 &C = scene->vertices[c].position;
 
         float t, u, v;
         int has_hit = moeller_trumbore_intersect(ray, A, B, C, &t, &u, &v);
@@ -122,31 +120,29 @@ intersect_face(const __restrict__ scene_t* scene,
             //     t, u, v);
 
             switch (face.shading) {
-                case FLAT_SHADING:
-                    hit.trueNormal = face.faceNormal;
-                    break;
-                case BARY_SHADING:
-                    hit.trueNormal = barycentric_lincom(
-                        scene->vertices[a].normal,
-                        scene->vertices[b].normal,
-                        scene->vertices[c].normal,
-                        t, u, v);
-                    hit.trueNormal.normalize();
-                    break;
+            case FLAT_SHADING:
+                hit.true_normal = face.faceNormal;
+                break;
+            case BARY_SHADING:
+                hit.true_normal =
+                    barycentric_lincom(scene->vertices[a].normal, scene->vertices[b].normal,
+                                       scene->vertices[c].normal, t, u, v);
+                hit.true_normal.normalize();
+                break;
             }
 
-            if (hit.trueNormal.dot(ray.r) > 0) {
+            if (hit.true_normal.dot(ray.r) > 0) {
                 // hit backside of face, mirror normal
-                hit.lightingNormal = -hit.trueNormal;
+                hit.incident_normal = -hit.true_normal;
             } else {
-                hit.lightingNormal = hit.trueNormal;
+                hit.incident_normal = hit.true_normal;
             }
         }
     }
 }
 
-PLATFORM void
-intersect_crude(const __restrict__ scene_t* scene, const Ray& ray, intersection_t& hit) {
+PLATFORM void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray,
+                              intersection_t &hit) {
     for (size_t i = 0; i < scene->faces.count; i++) {
         intersect_face(scene, ray, hit, i);
     }

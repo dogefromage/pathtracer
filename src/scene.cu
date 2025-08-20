@@ -153,7 +153,7 @@ static void print_material(const material_t *material) {
     log_trace("  Name: %s\n", material->name);
     log_trace("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y,
               material->color.z);
-    log_trace("  Color alpha: %.2f\n", material->colorAlpha);
+    log_trace("  Transmission: %.2f\n", material->transmission);
     log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
               material->emissive.z);
     log_trace("  Metallic: %.2f\n", material->metallic);
@@ -179,11 +179,18 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
     // PARSE MATERIAL
 
     float emissiveStrength = 0;
+    float transmissionFactor = 0;
+    float ior = 1.333;
 
     for (const auto &extension : sceneMat.extensions) {
         if (extension.first == "KHR_materials_emissive_strength") {
             emissiveStrength =
                 (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
+        } else if (extension.first == "KHR_materials_transmission") {
+            transmissionFactor =
+                (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
+        } else if (extension.first == "KHR_materials_ior") {
+            ior = (float)extension.second.Get("ior").GetNumberAsDouble();
         } else {
             printf("Unknown extension: %s\n", extension.first.c_str());
         }
@@ -192,13 +199,11 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
     // SET MATERIAL VALUES
 
     mat.color = parseVec3(sceneMat.pbrMetallicRoughness.baseColorFactor);
-    mat.colorAlpha = (float)sceneMat.pbrMetallicRoughness.baseColorFactor[3];
+    mat.emissive = emissiveStrength * parseVec3(sceneMat.emissiveFactor);
     mat.metallic = (float)sceneMat.pbrMetallicRoughness.metallicFactor;
     mat.roughness = (float)sceneMat.pbrMetallicRoughness.roughnessFactor;
-
-    mat.ior = 1.33; // TODO
-
-    mat.emissive = emissiveStrength * parseVec3(sceneMat.emissiveFactor);
+    mat.ior = ior;
+    mat.transmission = (float)transmissionFactor;
 
     // ADD MATERIAL
 
