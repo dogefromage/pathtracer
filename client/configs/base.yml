@@ -6,10 +6,10 @@ inputs:
   # - assets/dragon.gltf
   # - assets/bust.gltf
   # - assets/single_light.gltf
-  # - assets/glass_mirror.gltf
+  - assets/glass_mirror.gltf
   # - assets/cornell.gltf
   # - assets/two_lights.gltf
-  - assets/many_lights.gltf
+  # - assets/many_lights.gltf
 
 pathtracer:
 

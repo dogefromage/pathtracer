@@ -286,8 +286,6 @@ static PLATFORM Vec3 integrate_Li(context_t &c, Ray ray) {
 
         if (lss.visible && lss.p_direct > 0) {
             // balance heuristic on part of direct light
-
-            // TODO maybe cancel this division
             float weight = lss.p_direct / (lss.p_direct + lss.light_dir_bsdf.prob_i);
             // printf("%.2f, %.2f\n", lss.p_direct, lss.light_dir_bsdf.prob_i);
             light += throughput * (weight * lss.Ld / lss.p_direct);
