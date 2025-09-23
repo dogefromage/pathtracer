@@ -96,16 +96,15 @@ static PLATFORM Vec3 refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
     return p2 - normal * cosOut; // horizontal and vertical component
 }
 
-static PLATFORM void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv,
-                                        const intersection_t &hit, rand_state_t &rstate) {
+static PLATFORM void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
+                                        rand_state_t &rstate) {
     out.omega_i = reflect(hit.incident_normal, v_inv);
     out.prob_i = 1.0;
     float cos_theta = out.omega_i.dot(hit.incident_normal);
     out.bsdf.set(1.0 / cos_theta);
 }
 
-static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
-                                       const intersection_t &hit, rand_state_t &rstate) {
+static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
     bool isBackface = v_inv.dot(hit.true_normal) > 0;
 
     float n1 = 1.0;
@@ -134,8 +133,7 @@ static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv,
     }
 }
 
-PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
-                          rand_state_t &rstate) {
+PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
     // bool isGlass = false;
     bool isGlass = hit.mat->transmission >= 0.9;
     if (isGlass) {
@@ -168,8 +166,8 @@ PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersect
     return;
 }
 
-PLATFORM void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 &w,
-                            const intersection_t &hit, rand_state_t &rstate) {
+PLATFORM void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 &w, const intersection_t &hit,
+                            rand_state_t &rstate) {
 
     out.omega_i = w;
 

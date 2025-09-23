@@ -34,6 +34,7 @@ typedef struct {
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
     Vec3 color, emissive;
+    uint32_t textureColor;
     float metallic, roughness, ior, transmission;
 } material_t;
 
@@ -70,10 +71,7 @@ typedef struct {
     std::vector<material_t> materials;
     std::vector<light_t> lights;
 
-    std::unordered_map<int, uint32_t> materialMapping;
-
     std::vector<camera_t> cameras;
-
 } temp_scene_t;
 
 void scene_parse_gltf(scene_t &scene, const char *filename);

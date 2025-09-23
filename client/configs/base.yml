@@ -21,7 +21,7 @@ pathtracer:
     #define LOG_LEVEL_WARNING 2
     #define LOG_LEVEL_INFO 3
     #define LOG_LEVEL_TRACE 4
-    log-level: 3
+    log-level: 4
     log-stdout: True
 
   output:

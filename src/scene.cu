@@ -8,15 +8,18 @@
 #include "logger.h"
 #include "tiny_gltf.h"
 #include "utils.h"
+#include <filesystem>
 
 using namespace tinygltf;
 
-static Vec3 parseVec3(const std::vector<double> &v) {
+namespace fs = std::filesystem;
+
+static Vec3 get_vec3(const std::vector<double> &v) {
     assert(v.size() >= 3);
     return {(float)v[0], (float)v[1], (float)v[2]};
 }
 
-static Mat4 getForwardTransform(const Node &node) {
+static Mat4 get_transform(const Node &node) {
     if (node.matrix.size()) {
         // matrix is in column major order
 
@@ -40,8 +43,7 @@ static Mat4 getForwardTransform(const Node &node) {
         float m23 = node.matrix[14];
         float m33 = node.matrix[15];
 
-        return Mat4(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32,
-                    m33);
+        return Mat4(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
     }
 
     Mat4 forward = Mat4::Identity();
@@ -92,8 +94,7 @@ static Mat4 getForwardTransform(const Node &node) {
     return forward;
 }
 
-static void scene_parse_camera(temp_scene_t &scene, const Model &model, const Node &node,
-                               const Mat4 &modelTransform) {
+static void parse_camera(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
     const Camera &scene_cam = model.cameras[node.camera];
 
     if (scene_cam.type != "perspective") {
@@ -116,8 +117,7 @@ static void scene_parse_camera(temp_scene_t &scene, const Model &model, const No
     scene.cameras.push_back(cam);
 }
 
-static void scene_parse_light(temp_scene_t &scene, const Model &model, const Node &node,
-                              const Mat4 &modelTransform) {
+static void parse_light(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
     const Light &modelLight = model.lights[node.light];
 
     light_t light;
@@ -157,27 +157,16 @@ static void scene_parse_light(temp_scene_t &scene, const Model &model, const Nod
 static void print_material(const material_t *material) {
     log_trace("Material:\n");
     log_trace("  Name: %s\n", material->name);
-    log_trace("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y,
-              material->color.z);
+    log_trace("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y, material->color.z);
     log_trace("  Transmission: %.2f\n", material->transmission);
-    log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
-              material->emissive.z);
+    log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y, material->emissive.z);
     log_trace("  Metallic: %.2f\n", material->metallic);
     log_trace("  Roughness: %.2f\n", material->roughness);
     log_trace("  IoR: %.2f\n", material->ior);
 }
 
-static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
-                                     int materialIndex) {
-    auto previousMatIndex = scene.materialMapping.find(materialIndex);
-    if (previousMatIndex != scene.materialMapping.end()) {
-        return previousMatIndex->second;
-    }
-
-    const Material &sceneMat = model.materials[materialIndex];
+static void parse_material(temp_scene_t &scene, const tinygltf::Material &sceneMat) {
     material_t mat;
-
-    log_trace("Material: %s\n", sceneMat.name.c_str());
 
     strncpy(mat.name, sceneMat.name.c_str(), MATERIAL_NAME_SIZE - 1);
     mat.name[MATERIAL_NAME_SIZE - 1] = '\0';
@@ -190,11 +179,9 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
 
     for (const auto &extension : sceneMat.extensions) {
         if (extension.first == "KHR_materials_emissive_strength") {
-            emissiveStrength =
-                (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
+            emissiveStrength = (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_transmission") {
-            transmissionFactor =
-                (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
+            transmissionFactor = (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_ior") {
             ior = (float)extension.second.Get("ior").GetNumberAsDouble();
         } else {
@@ -204,26 +191,27 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
 
     // SET MATERIAL VALUES
 
-    mat.color = parseVec3(sceneMat.pbrMetallicRoughness.baseColorFactor);
-    mat.emissive = emissiveStrength * parseVec3(sceneMat.emissiveFactor);
+    mat.color = get_vec3(sceneMat.pbrMetallicRoughness.baseColorFactor);
+    mat.emissive = emissiveStrength * get_vec3(sceneMat.emissiveFactor);
     mat.metallic = (float)sceneMat.pbrMetallicRoughness.metallicFactor;
     mat.roughness = (float)sceneMat.pbrMetallicRoughness.roughnessFactor;
     mat.ior = ior;
     mat.transmission = (float)transmissionFactor;
 
-    // ADD MATERIAL
-
-    uint32_t newIndex = scene.materials.size();
-    scene.materials.push_back(mat);
-    scene.materialMapping[materialIndex] = newIndex;
+    mat.textureColor = sceneMat.pbrMetallicRoughness.baseColorTexture.index;
+    if (sceneMat.pbrMetallicRoughness.baseColorTexture.texCoord != 0) {
+        log_warning("TODO implement other texCoords");
+    }
+    for (const auto &extension : sceneMat.pbrMetallicRoughness.baseColorTexture.extensions) {
+        log_warning("TODO texture extentions");
+    }
 
     print_material(&mat);
 
-    return newIndex;
+    scene.materials.push_back(mat);
 }
 
-static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, int accIndex,
-                                    int arity) {
+static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, int accIndex, int arity) {
     const Accessor &acc = model.accessors[accIndex];
     const BufferView &bufView = model.bufferViews[acc.bufferView];
     const Buffer &buf = model.buffers[bufView.buffer];
@@ -236,10 +224,8 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, 
 
     if (acc.maxValues.size() && acc.maxValues.size()) {
         hasGivenBounds = true;
-        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1],
-                           (float)acc.minValues[2]};
-        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1],
-                           (float)acc.maxValues[2]};
+        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1], (float)acc.minValues[2]};
+        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1], (float)acc.maxValues[2]};
     }
 
     assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
@@ -273,8 +259,7 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, 
     // log_trace("%lu vec3 parsed in given min and max:\n", acc.count);
 }
 
-static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &model,
-                                    int accIndex) {
+static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &model, int accIndex) {
     const Accessor &acc = model.accessors[accIndex];
     const BufferView &bufView = model.bufferViews[acc.bufferView];
     const Buffer &buf = model.buffers[bufView.buffer];
@@ -323,19 +308,22 @@ static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &mo
     log_trace("Indices scanned in range [%d, %d]\n", min, max);
 }
 
-static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node &node,
-                             const Mat4 &modelTransform) {
-    log_trace("Parsing mesh of %s\n", node.name.c_str());
+static void parse_mesh(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
+    log_trace("Parsing mesh of node: %s\n", node.name.c_str());
 
     const Mesh &mesh = model.meshes[node.mesh];
     Mat3 linearModelTransform = modelTransform.getLinearPart();
 
     for (const Primitive &prim : mesh.primitives) {
-        int newMatIndex = scene_parse_material(scene, model, prim.material);
+        log_trace("Parsing primitive\n");
+
+        if (prim.material < 0 || prim.material >= (int)scene.materials.size()) {
+            log_trace("Invalid material %d\n", prim.material);
+        }
 
         std::vector<Vec3> positions;
         std::vector<Vec3> normals;
-        std::vector<Vec3> texcoords;
+        std::vector<Vec3> texcoord0;
         std::vector<uint32_t> indices;
 
         for (const auto &attr : prim.attributes) {
@@ -347,7 +335,7 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
                 scene_parse_acc_to_vec3(normals, model, attr.second, 3);
             } else if (attr.first == "TEXCOORD_0") {
                 log_trace("Scanning TEXCOORD_0\n");
-                scene_parse_acc_to_vec3(texcoords, model, attr.second, 2);
+                scene_parse_acc_to_vec3(texcoord0, model, attr.second, 2);
             } else {
                 log_warning("skipped unsupported attribute '%s'\n", attr.first.c_str());
             }
@@ -362,8 +350,13 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
         bool hasNormals = normals.size() > 0;
         assert(!hasNormals || normals.size() == vertCount);
 
+        bool hasTexcoord0 = texcoord0.size() > 0;
+        assert(!hasTexcoord0 || texcoord0.size() == vertCount);
+
         int numIndices = indices.size();
         assert(numIndices && numIndices % 3 == 0);
+
+        log_trace("Adding faces\n");
 
         int vertOffset = scene.vertices.size();
         for (int i = 0; i < vertCount; i++) {
@@ -371,19 +364,25 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
 
             Vec4 p = modelTransform * Vec4::toHomogeneous(positions[i]);
             v.position = p.dehomogenise();
-            v.texcoord = texcoords[i];
 
             if (hasNormals) {
                 v.normal = linearModelTransform * normals[i];
             } else {
                 v.normal.set(0);
             }
+
+            if (hasTexcoord0) {
+                v.texcoord = texcoord0[i];
+            } else {
+                v.texcoord.set(0);
+            }
+
             scene.vertices.push_back(v);
         }
 
         for (int i = 0; i < numIndices; i += 3) {
             face_t face;
-            face.material = newMatIndex;
+            face.material = prim.material;
 
             face.vertexCount = 3;
             face.vertices[0] = vertOffset + indices[i];
@@ -407,22 +406,24 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
 
             scene.faces.push_back(face);
         }
+
+        log_trace("Done with primitive\n");
     }
+    log_trace("Done with mesh\n");
 }
 
-static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node &node,
-                             Mat4 parentTransform) {
-    Mat4 nodeForwardTransform = getForwardTransform(node);
+static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node &node, Mat4 parentTransform) {
+    Mat4 nodeForwardTransform = get_transform(node);
     Mat4 modelTransform = parentTransform * nodeForwardTransform;
 
     if (node.camera >= 0) {
-        scene_parse_camera(scene, model, node, modelTransform);
+        parse_camera(scene, model, node, modelTransform);
     }
     if (node.light >= 0) {
-        scene_parse_light(scene, model, node, modelTransform);
+        parse_light(scene, model, node, modelTransform);
     }
     if (node.mesh >= 0) {
-        scene_parse_mesh(scene, model, node, modelTransform);
+        parse_mesh(scene, model, node, modelTransform);
     }
 
     for (const int &childIndex : node.children) {
@@ -434,38 +435,97 @@ static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node
 void scene_parse_gltf(scene_t &finalScene, const char *filename) {
     log_info("Parsing .gltf... \n");
 
-    Model model;
-    TinyGLTF loader;
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
     std::string err;
     std::string warn;
+    const std::string ext = GetFilePathExtension(filename);
 
-    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    bool ret = false;
+    if (ext.compare("glb") == 0) {
+        // assume binary glTF.
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+    } else {
+        // assume ascii glTF.
+        ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    }
 
     if (!warn.empty()) {
-        log_warning("TinyGLTF WARNING: %s\n", warn.c_str());
+        log_warning("glTF parse warning: %s\n", warn);
     }
+
     if (!err.empty()) {
-        log_error("TinyGLTF ERROR: %s\n", err.c_str());
+        log_error("glTF parse error: %s\n", err);
     }
     if (!ret) {
-        log_error("Failed to parse glTF\n");
+        log_error("Failed to load glTF: %s\n", filename);
         exit(EXIT_FAILURE);
     }
 
-    // for (const tinygltf::Texture &tex : model.textures) {
-    //     printf("tex.name %s\n", tex.name);
-    // }
-
-    for (const tinygltf::Image &img : model.images) {
-        printf("img.name %s\n", img.name);
-    }
+    std::cout << "loaded glTF file has:\n"
+              << model.accessors.size() << " accessors\n"
+              << model.animations.size() << " animations\n"
+              << model.buffers.size() << " buffers\n"
+              << model.bufferViews.size() << " bufferViews\n"
+              << model.materials.size() << " materials\n"
+              << model.meshes.size() << " meshes\n"
+              << model.nodes.size() << " nodes\n"
+              << model.textures.size() << " textures\n"
+              << model.images.size() << " images\n"
+              << model.skins.size() << " skins\n"
+              << model.samplers.size() << " samplers\n"
+              << model.cameras.size() << " cameras\n"
+              << model.scenes.size() << " scenes\n"
+              << model.lights.size() << " lights\n";
 
     temp_scene_t tempScene;
+
+    // IMAGES
+
+    for (const auto &img : model.images) {
+        // log_trace("img.name %s\n", img.name);
+        // log_trace("img.mimeType %s\n", img.mimeType.c_str());
+
+        fs::path img_name = img.uri.c_str();
+        fs::path path_gltf = filename;
+        fs::path path_img = path_gltf.parent_path() / img_name;
+
+        log_trace("img.uri %s\n", img.uri.c_str());
+        log_trace("path_img %s\n", path_img.c_str());
+        int width, height, components;
+        unsigned char *data = stbi_load(path_img.c_str(), &width, &height, &components, STBI_default);
+        log_trace("img: (w=%d, h=%d, components=%d)\n", width, height, components);
+        stbi_image_free(data);
+    }
+
+    // TEXTURES
+
+    for (const auto &tex : model.textures) {
+        log_trace("tex.source %d\n", tex.source);
+        log_trace("tex.sampler %d\n", tex.sampler);
+    }
+
+    // MATERIALS
+
+    for (const tinygltf::Image &img : model.images) {
+        log_trace("img.name %s\n", img.name);
+    }
+
+    // MATERIALS
+
+    for (const auto &sceneMat : model.materials) {
+        parse_material(tempScene, sceneMat);
+    }
+
+    // NODES
+
     Scene &modelScene = model.scenes[model.defaultScene];
     for (const int &nodeIndex : modelScene.nodes) {
         const Node &node = model.nodes[nodeIndex];
         scene_parse_node(tempScene, model, node, Mat4::Identity());
     }
+
+    // FINALIZE
 
     if (tempScene.cameras.size() == 0) {
         log_warning("No camera found in scene! Placing default camera.\n");
@@ -475,9 +535,8 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
         cam.updir = {0, 0, 1};
         cam.yfov = 0.7;
         tempScene.cameras.push_back(cam);
-    }
-    if (tempScene.cameras.size() > 1) {
-        log_warning("Multiple cameras found in scene, arbitrarily choosing one.\n");
+    } else if (tempScene.cameras.size() > 1) {
+        log_warning("Multiple cameras found in scene, choosing camera 0.\n");
     }
     finalScene.camera = tempScene.cameras[0];
 

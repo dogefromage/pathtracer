@@ -6,14 +6,17 @@ void print_stacktrace();
 cudaError_t check_cuda_err(cudaError_t err);
 
 // host placeholder struct which will be copied over later, must get device pointers
-template <typename T>
-size_t copy_device_fixed_array(fixed_array<T> *placeholder, const fixed_array<T> *src) {
+template <typename T> size_t copy_device_fixed_array(fixed_array<T> *placeholder, const fixed_array<T> *src) {
     cudaError_t err;
     size_t size = sizeof(T) * src->count;
+
+    log_info("A\n");
 
     err = cudaMalloc(&placeholder->items, size);
     if (check_cuda_err(err))
         exit(EXIT_FAILURE);
+
+    log_info("B\n");
 
     err = cudaMemcpy(placeholder->items, src->items, size, cudaMemcpyHostToDevice);
     if (check_cuda_err(err))
