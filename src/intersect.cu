@@ -103,7 +103,7 @@ PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
 
         if (has_hit && t >= 0 && t < hit.distance) {
             hit.faceIndex = faceIndex;
-            hit.has_hit = 1;
+            hit.has_hit = true;
             hit.distance = t;
             assert(face.material < (int)scene->materials.count);
 
@@ -137,6 +137,11 @@ PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
             } else {
                 hit.incident_normal = hit.true_normal;
             }
+
+            CHECK_VEC(hit.true_normal);
+            CHECK_VEC(hit.incident_normal);
+            assert(hit.true_normal != Vec3::Zero());
+            assert(hit.incident_normal != Vec3::Zero());
         }
     }
 }

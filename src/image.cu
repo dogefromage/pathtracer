@@ -3,13 +3,16 @@
 #include <cstdint>
 
 #include "image.h"
+#include "logger.h"
 
 #define STBI_ONLY_PNG
 #include "stb_image_write.h"
 
 uint8_t clamp_256(float c) {
-    if (c < 0.0) c = 0.0;
-    if (c >= 1.0) c = 1.0;
+    if (c < 0.0)
+        c = 0.0;
+    if (c >= 1.0)
+        c = 1.0;
     return (uint8_t)(255 * c);
 }
 
@@ -43,8 +46,8 @@ float linear_to_srgb_gamma(float c) {
     }
 }
 
-const char* get_file_extension(const char* path) {
-    const char* dot = strrchr(path, '.');
+const char *get_file_extension(const char *path) {
+    const char *dot = strrchr(path, '.');
     if (!dot || dot == path) {
         return NULL;
     }
@@ -53,18 +56,21 @@ const char* get_file_extension(const char* path) {
 
 void check_sanity(Vec3 v, int x, int y) {
     if (!isfinite(v.x)) {
-        printf("WARNING: pixel.x = %f is not finite at (%d,%d)\n", v.x, x, y);
+        log_error("pixel.x = %f is not finite at (%d,%d)\n", v.x, x, y);
+        exit(EXIT_FAILURE);
     }
     if (!isfinite(v.y)) {
-        printf("WARNING: pixel.y = %f is not finite at (%d,%d)\n", v.y, x, y);
+        log_error("pixel.y = %f is not finite at (%d,%d)\n", v.y, x, y);
+        exit(EXIT_FAILURE);
     }
     if (!isfinite(v.z)) {
-        printf("WARNING: pixel.z = %f is not finite at (%d,%d)\n", v.z, x, y);
+        log_error("pixel.z = %f is not finite at (%d,%d)\n", v.z, x, y);
+        exit(EXIT_FAILURE);
     }
 }
 
-void write_image(Vec3* linearpixels, int width, int height, const char* filename) {
-    uint8_t* buf = (uint8_t*)malloc(width * height * 3 * sizeof(uint8_t));
+void write_image(Vec3 *linearpixels, int width, int height, const char *filename) {
+    uint8_t *buf = (uint8_t *)malloc(width * height * 3 * sizeof(uint8_t));
     assert(buf && "malloc");
     // apply tonemapping, hdr, etc...
 
@@ -72,7 +78,7 @@ void write_image(Vec3* linearpixels, int width, int height, const char* filename
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            const Vec3& c = linearpixels[y * width + x];
+            const Vec3 &c = linearpixels[y * width + x];
             check_sanity(c, x, y);
             whitePointLuminance = fmaxf(whitePointLuminance, luminance(c));
         }
@@ -92,12 +98,12 @@ void write_image(Vec3* linearpixels, int width, int height, const char* filename
         }
     }
 
-    const char* extension = get_file_extension(filename);
+    const char *extension = get_file_extension(filename);
 
     if (!strcmp(extension, "png")) {
-        stbi_write_png(filename, width, height, 3, (void*)buf, 3 * width);
+        stbi_write_png(filename, width, height, 3, (void *)buf, 3 * width);
     } else {
-        printf("Unsupported output image type: %s\n", extension);
+        log_error("Unsupported output image type: %s\n", extension);
     }
 
     free(buf);

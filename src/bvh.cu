@@ -263,9 +263,8 @@ void bvh_build(bvh_t &bvh, const scene_t &scene) {
     bvh.centroids.items = NULL;
 
     if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
-        printf(
-            "ERROR bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n",
-            stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
+        log_error("bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n",
+                  stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
         exit(EXIT_FAILURE);
     }
 

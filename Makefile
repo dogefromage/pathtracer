@@ -1,13 +1,15 @@
 
-CUDA_INCLUDE = /usr/local/cuda-12.5/include
-CUDA_LIB_DIR = -L/usr/local/cuda-12.5/lib64
+CUDA_INCLUDE = 
+CUDA_LIB_DIR = 
+# CUDA_INCLUDE = -I/usr/include
+# CUDA_LIB_DIR = -L/usr/lib/x86_64-linux-gnu
 CUDA_LINK_LIBS= -lcudart -lcurand
 
 # CC = gcc
 # CC_FLAGS = -Wall -Wextra -g -G -I./include -std=gnu99
 
 NVCC = nvcc
-NVCC_FLAGS = -I./include -I$(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall" # -g -G
+NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall" -g -G
 
 #-O3 
 #--use_fast_math

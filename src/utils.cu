@@ -1,16 +1,16 @@
 #include "utils.h"
-#include <stdio.h>
 #include <cstdio>
 #include <execinfo.h>
+#include <stdio.h>
 
 #define MAX_STACK_LEVELS 20
 
 void print_stacktrace() {
-  void *buffer[MAX_STACK_LEVELS];
-  int levels = backtrace(buffer, MAX_STACK_LEVELS);
+    void *buffer[MAX_STACK_LEVELS];
+    int levels = backtrace(buffer, MAX_STACK_LEVELS);
 
-  // print to stderr (fd = 2), and remove this function from the trace
-  backtrace_symbols_fd(buffer + 1, levels - 1, 2);
+    // print to stderr (fd = 2), and remove this function from the trace
+    backtrace_symbols_fd(buffer + 1, levels - 1, 2);
 }
 
 cudaError_t check_cuda_err(cudaError_t err) {
@@ -21,7 +21,7 @@ cudaError_t check_cuda_err(cudaError_t err) {
     return err;
 }
 
-void human_readable_size(char* buf, size_t bytes) {
+void human_readable_size(char *buf, size_t bytes) {
     if (bytes < 1'000) {
         sprintf(buf, "%luB", bytes);
     } else if (bytes < 1'000'000) {

@@ -14,6 +14,7 @@ typedef struct {
      * and face shading is set to SHADING_FLAT
      */
     Vec3 normal;
+    Vec3 texcoord;
 
 } vertex_t;
 
@@ -71,7 +72,7 @@ typedef struct {
 
     std::unordered_map<int, uint32_t> materialMapping;
 
-    camera_t camera;
+    std::vector<camera_t> cameras;
 
 } temp_scene_t;
 

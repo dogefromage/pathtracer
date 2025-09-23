@@ -94,22 +94,26 @@ static Mat4 getForwardTransform(const Node &node) {
 
 static void scene_parse_camera(temp_scene_t &scene, const Model &model, const Node &node,
                                const Mat4 &modelTransform) {
-    const Camera &cam = model.cameras[node.camera];
+    const Camera &scene_cam = model.cameras[node.camera];
 
-    if (cam.type != "perspective") {
-        printf("unsupported camera type: %s\n", cam.type.c_str());
+    if (scene_cam.type != "perspective") {
+        log_error("unsupported camera type: %s\n", scene_cam.type.c_str());
         exit(EXIT_FAILURE);
     }
 
-    scene.camera.yfov = cam.perspective.yfov;
+    camera_t cam;
+
+    cam.yfov = scene_cam.perspective.yfov;
 
     Vec4 position = modelTransform * Vec4{0, 0, 0, 1};
     Vec4 target = modelTransform * Vec4{0, 0, -1, 1};
     Vec4 updir = modelTransform * Vec4{0, 1, 0, 1};
 
-    scene.camera.position = position.dehomogenise();
-    scene.camera.target = target.dehomogenise();
-    scene.camera.updir = updir.dehomogenise() - scene.camera.position;
+    cam.position = position.dehomogenise();
+    cam.target = target.dehomogenise();
+    cam.updir = updir.dehomogenise() - cam.position;
+
+    scene.cameras.push_back(cam);
 }
 
 static void scene_parse_light(temp_scene_t &scene, const Model &model, const Node &node,
@@ -130,13 +134,15 @@ static void scene_parse_light(temp_scene_t &scene, const Model &model, const Nod
 
     Mat3 linearTransform = modelTransform.getLinearPart();
     light.direction = (linearTransform * Vec3(0, 0, -1)).normalized();
+    // printf("Light direction: \n");
+    // light.direction.print();
 
     if (modelLight.type == "directional") {
         light.type = LIGHT_DIRECTIONAL;
     } else if (modelLight.type == "point") {
         light.type = LIGHT_POINT;
     } else {
-        printf("Unsupported light '%s'\n", modelLight.type.c_str());
+        log_error("Unsupported light '%s'\n", modelLight.type.c_str());
         exit(EXIT_FAILURE);
     }
 
@@ -192,7 +198,7 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
         } else if (extension.first == "KHR_materials_ior") {
             ior = (float)extension.second.Get("ior").GetNumberAsDouble();
         } else {
-            printf("Unknown extension: %s\n", extension.first.c_str());
+            log_warning("Unknown extension: %s\n", extension.first.c_str());
         }
     }
 
@@ -216,10 +222,13 @@ static uint32_t scene_parse_material(temp_scene_t &scene, const Model &model,
     return newIndex;
 }
 
-static void scene_parse_acc_vec3(std::vector<Vec3> &list, const Model &model, int accIndex) {
+static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, int accIndex,
+                                    int arity) {
     const Accessor &acc = model.accessors[accIndex];
     const BufferView &bufView = model.bufferViews[acc.bufferView];
     const Buffer &buf = model.buffers[bufView.buffer];
+
+    assert(arity == 2 || arity == 3);
 
     AABB actualBounds;
     AABB givenBounds;
@@ -243,9 +252,12 @@ static void scene_parse_acc_vec3(std::vector<Vec3> &list, const Model &model, in
         size_t byteNumber = acc.byteOffset + bufView.byteOffset + byteStride * i;
         const float *item = reinterpret_cast<const float *>(&buf.data[byteNumber]);
 
-        Vec3 v = {item[0], item[1], item[2]};
+        Vec3 v = Vec3::Zero();
+        for (int j = 0; j < arity; j++) {
+            v[j] = item[j];
+        }
         // v.print();
-        list.push_back(v);
+        out.push_back(v);
 
         actualBounds.grow(v);
 
@@ -291,8 +303,12 @@ static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &mo
         case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
             index = (int)*reinterpret_cast<const uint32_t *>(&buf.data[byteNumber]);
             break;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+            index = (int)*reinterpret_cast<const uint8_t *>(&buf.data[byteNumber]);
+            break;
+
         default:
-            printf("Component type not implemented: %d\n", acc.componentType);
+            log_error("Component type not implemented: %d\n", acc.componentType);
             exit(EXIT_FAILURE);
             break;
         }
@@ -319,15 +335,19 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
 
         std::vector<Vec3> positions;
         std::vector<Vec3> normals;
+        std::vector<Vec3> texcoords;
         std::vector<uint32_t> indices;
 
         for (const auto &attr : prim.attributes) {
             if (attr.first == "POSITION") {
                 log_trace("Scanning POSITION\n");
-                scene_parse_acc_vec3(positions, model, attr.second);
+                scene_parse_acc_to_vec3(positions, model, attr.second, 3);
             } else if (attr.first == "NORMAL") {
                 log_trace("Scanning NORMAL\n");
-                scene_parse_acc_vec3(normals, model, attr.second);
+                scene_parse_acc_to_vec3(normals, model, attr.second, 3);
+            } else if (attr.first == "TEXCOORD_0") {
+                log_trace("Scanning TEXCOORD_0\n");
+                scene_parse_acc_to_vec3(texcoords, model, attr.second, 2);
             } else {
                 log_warning("skipped unsupported attribute '%s'\n", attr.first.c_str());
             }
@@ -351,6 +371,7 @@ static void scene_parse_mesh(temp_scene_t &scene, const Model &model, const Node
 
             Vec4 p = modelTransform * Vec4::toHomogeneous(positions[i]);
             v.position = p.dehomogenise();
+            v.texcoord = texcoords[i];
 
             if (hasNormals) {
                 v.normal = linearModelTransform * normals[i];
@@ -431,16 +452,38 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
         exit(EXIT_FAILURE);
     }
 
+    // for (const tinygltf::Texture &tex : model.textures) {
+    //     printf("tex.name %s\n", tex.name);
+    // }
+
+    for (const tinygltf::Image &img : model.images) {
+        printf("img.name %s\n", img.name);
+    }
+
     temp_scene_t tempScene;
-
     Scene &modelScene = model.scenes[model.defaultScene];
-
     for (const int &nodeIndex : modelScene.nodes) {
         const Node &node = model.nodes[nodeIndex];
         scene_parse_node(tempScene, model, node, Mat4::Identity());
     }
 
-    finalScene.camera = tempScene.camera;
+    if (tempScene.cameras.size() == 0) {
+        log_warning("No camera found in scene! Placing default camera.\n");
+        camera_t cam;
+        cam.position = {1, 1, 1};
+        cam.target = {0, 0, 0};
+        cam.updir = {0, 0, 1};
+        cam.yfov = 0.7;
+        tempScene.cameras.push_back(cam);
+    }
+    if (tempScene.cameras.size() > 1) {
+        log_warning("Multiple cameras found in scene, arbitrarily choosing one.\n");
+    }
+    finalScene.camera = tempScene.cameras[0];
+
+    if (tempScene.lights.size() == 0) {
+        log_info("No lights found in scene.\n");
+    }
 
     // copy into final scene
     fixed_array_from_vector(finalScene.vertices, tempScene.vertices);

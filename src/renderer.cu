@@ -165,12 +165,13 @@ static PLATFORM void sample_light_source(light_source_sample_t &out, context_t &
     out.p_lss = 1.0f / (float)c.lst->nodes.count;
 
     if (node.type == LST_SOURCE_LIGHT) {
-        const light_t &light = c.scene->lights[0];
+        const light_t &light = c.scene->lights[node.index];
 
         if (light.type == LIGHT_POINT) {
-            float light_rad = 0.1;
-            // TODO make this sample sphere volume not surface
-            Vec3 light_pos = light.position + light_rad * sphere_sample_uniform(c.rstate);
+            // TODO check maths to add radius
+            // float light_rad = 0.1;
+            Vec3 light_pos = light.position;
+            // + light_rad * sphere_sample_uniform(c.rstate);
 
             Vec3 dir_hit_to_light = light_pos - hit.position;
             float distance = dir_hit_to_light.magnitude();
@@ -188,19 +189,40 @@ static PLATFORM void sample_light_source(light_source_sample_t &out, context_t &
                 return;
             }
 
-            float radiantIntensity =
-                light.intensity /
-                683.0; // this is only approximation, color spaces are violated
-            Vec3 integrand = light.color * radiantIntensity / (distance * distance);
+            // https: //
+            // github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
+            // https://physics.stackexchange.com/questions/382755/converting-illumination-to-irradiance#383501
+            // this is only approximation, color spaces are violated
+            float watts_per_lumen = 1.0 / 683.0;
+            float radiant_intensity = light.intensity * watts_per_lumen;
+            Vec3 light_radiance = light.color * radiant_intensity / (distance * distance);
 
-            out.incoming_radiance = integrand;
-            // probability stays same because point light is dirac delta function
+            out.incoming_radiance = light_radiance;
+            out.p_lss *= 1;
             return;
 
         } else {
             // directional light: TODO
-            assert(false);
-            out.p_lss = 0;
+
+            out.dir_hit_to_light = -light.direction;
+            out.dir_hit_to_light.normalize();
+
+            Ray shadow_ray;
+            initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light,
+                                hit.incident_normal);
+            intersection_t shadow_hit;
+            intersect(c.bvh, c.scene, shadow_ray, shadow_hit);
+            if (shadow_hit.has_hit) {
+                // not sun ray
+                out.p_lss = 0;
+                return;
+            }
+
+            float watts_per_lumen = 1.0 / 683.0;
+            float radiance = light.intensity * watts_per_lumen;
+
+            out.incoming_radiance = light.color * radiance;
+            out.p_lss *= 1;
             return;
         }
 
@@ -224,14 +246,22 @@ static PLATFORM void sample_light_source(light_source_sample_t &out, context_t &
 
 static PLATFORM float evaluate_direct_p(context_t &c, const Ray &ray,
                                         const intersection_t &hit) {
+
+    uint32_t num_nodes = c.lst->nodes.count;
+    if (num_nodes == 0) {
+        return 0;
+    }
+
     float p_total = 0;
 
-    for (int i = 0; i < c.lst->nodes.count; i++) {
+    for (int i = 0; i < num_nodes; i++) {
         float p_node;
 
         const lst_node_t &node = c.lst->nodes[i];
 
         if (node.type == LST_SOURCE_LIGHT) {
+            // at the moment, all light sources are dirac-delta, thus direct_p is 0 for non
+            // light-sampled rays
             p_node = 0;
 
         } else {
@@ -245,7 +275,7 @@ static PLATFORM float evaluate_direct_p(context_t &c, const Ray &ray,
         p_total += p_node;
     }
 
-    p_total /= (float)c.lst->nodes.count;
+    p_total /= (float)num_nodes;
     return p_total;
 }
 
@@ -280,6 +310,7 @@ static PLATFORM Vec3 integrate_Li(context_t &c, Ray ray) {
 
             bsdf_sample_t lss_bsdf;
             evaluate_bsdf(lss_bsdf, ray.r, lss.dir_hit_to_light, hit, c.rstate);
+
             float cos_theta_x = std::abs(hit.true_normal.dot(lss.dir_hit_to_light));
             Vec3 direct_outgoing_radiance = lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
 
@@ -292,7 +323,7 @@ static PLATFORM Vec3 integrate_Li(context_t &c, Ray ray) {
         // INDIRECT LIGHT
         bsdf_sample_t indirect_bsdf;
         sample_bsdf(indirect_bsdf, ray.r, hit, c.rstate);
-        assert(indirect_bsdf.prob_i != 0 && "sample with 0 probability");
+        assert(indirect_bsdf.prob_i > 0 && "sample with 0 probability");
 
         // set next ray
         initialize_safe_ray(ray, hit.position, indirect_bsdf.omega_i, hit.true_normal);
@@ -304,6 +335,8 @@ static PLATFORM Vec3 integrate_Li(context_t &c, Ray ray) {
         throughput *=
             indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
     }
+
+    CHECK_VEC(light);
 
     return light;
 }
@@ -410,9 +443,6 @@ __global__ void render_kernel(Vec3 *img, const __restrict__ bvh_t *bvh,
 
     Vec3 total_light = {0, 0, 0};
 
-    // sanity_check(c);
-    // return;
-
     for (int i = 0; i < currentSamples; i++) {
         float sensor_variance = 0.33;
         float sensor_x = (float)pixel_x + sensor_variance * random_normal(c.rstate);
@@ -424,7 +454,17 @@ __global__ void render_kernel(Vec3 *img, const __restrict__ bvh_t *bvh,
         Ray camera_ray;
         get_camera_ray(camera_ray, scene, u, v);
 
+        // intersection_t hit;
+        // intersect(c.bvh, c.scene, camera_ray, hit);
+        // Vec3 current_light;
+        // if (hit.has_hit) {
+        //     current_light = {1, 1, 1};
+        // } else {
+        //     current_light = {0, 0, 0};
+        // }
+
         Vec3 current_light = integrate_Li(c, camera_ray);
+
         // Vec3 current_light = integrate_Li_classic(bvh, scene, lst, camera_ray, rstate,
         // settings);
 
