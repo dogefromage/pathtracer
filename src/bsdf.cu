@@ -5,7 +5,7 @@ typedef struct {
     float p;
 } sample_t;
 
-static PLATFORM Vec3 world_of_local_dir(const Vec3 &normal, const Vec3 &v) {
+static __device__ Vec3 world_of_local_dir(const Vec3 &normal, const Vec3 &v) {
     // let normal be new z coordinate
     Vec3 z = normal;
 
@@ -22,7 +22,7 @@ static PLATFORM Vec3 world_of_local_dir(const Vec3 &normal, const Vec3 &v) {
     return x * v.x + y * v.y + z * v.z;
 }
 
-PLATFORM Vec3 sphere_sample_uniform(rand_state_t &rstate) {
+__device__ Vec3 sphere_sample_uniform(rand_state_t &rstate) {
     Vec3 r;
     do {
         r.x = 2 * random_uniform(rstate) - 1;
@@ -33,13 +33,13 @@ PLATFORM Vec3 sphere_sample_uniform(rand_state_t &rstate) {
     return r.normalized();
 }
 
-static PLATFORM Vec3 hemi_sample_uniform(const Vec3 &normal_unit, rand_state_t &rstate) {
+static __device__ Vec3 hemi_sample_uniform(const Vec3 &normal_unit, rand_state_t &rstate) {
     Vec3 r = sphere_sample_uniform(rstate);
     r.z = std::abs(r.z);
     return world_of_local_dir(normal_unit, r);
 }
 
-static PLATFORM sample_t hemi_sample_cosine(const Vec3 normal_unit, rand_state_t &rstate) {
+static __device__ sample_t hemi_sample_cosine(const Vec3 normal_unit, rand_state_t &rstate) {
     // weird trick: sample a circle and just "push" upwards into hemisphere
     // https://www.youtube.com/watch?v=c6NvZ74LAhE
 
@@ -61,7 +61,7 @@ static PLATFORM sample_t hemi_sample_cosine(const Vec3 normal_unit, rand_state_t
 }
 
 // https://blog.demofox.org/2017/01/09/raytracing-reflection-refraction-fresnel-total-internal-reflection-and-beers-law/
-static PLATFORM float fresnel_reflect_amount(float n1, float n2, Vec3 normal, Vec3 v_inv) {
+static __device__ float fresnel_reflect_amount(float n1, float n2, Vec3 normal, Vec3 v_inv) {
     // Schlick aproximation
     float r0 = (n1 - n2) / (n1 + n2);
     r0 *= r0;
@@ -79,11 +79,11 @@ static PLATFORM float fresnel_reflect_amount(float n1, float n2, Vec3 normal, Ve
     return ret;
 }
 
-static PLATFORM Vec3 reflect(Vec3 normal, Vec3 v_inv) {
+static __device__ Vec3 reflect(Vec3 normal, Vec3 v_inv) {
     return v_inv - 2 * normal.dot(v_inv) * normal;
 }
 
-static PLATFORM Vec3 refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
+static __device__ Vec3 refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
     Vec3 p1 = v_inv - v_inv.dot(normal) * normal;
     Vec3 p2 = (n1 / n2) * p1;
     float sin2out = p2.dot(p2);
@@ -96,15 +96,16 @@ static PLATFORM Vec3 refract(float n1, float n2, Vec3 normal, Vec3 v_inv) {
     return p2 - normal * cosOut; // horizontal and vertical component
 }
 
-static PLATFORM void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
-                                        rand_state_t &rstate) {
+static __device__ void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
+                                          rand_state_t &rstate) {
     out.omega_i = reflect(hit.incident_normal, v_inv);
     out.prob_i = 1.0;
     float cos_theta = out.omega_i.dot(hit.incident_normal);
     out.bsdf.set(1.0 / cos_theta);
 }
 
-static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
+static __device__ void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
+                                         rand_state_t &rstate) {
     bool isBackface = v_inv.dot(hit.true_normal) > 0;
 
     float n1 = 1.0;
@@ -133,7 +134,7 @@ static PLATFORM void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, co
     }
 }
 
-PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
+__device__ void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
     // bool isGlass = false;
     bool isGlass = hit.mat->transmission >= 0.9;
     if (isGlass) {
@@ -166,8 +167,8 @@ PLATFORM void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersect
     return;
 }
 
-PLATFORM void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 &w, const intersection_t &hit,
-                            rand_state_t &rstate) {
+__device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 &w, const intersection_t &hit,
+                              rand_state_t &rstate) {
 
     out.omega_i = w;
 

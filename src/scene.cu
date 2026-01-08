@@ -10,8 +10,7 @@
 #include "utils.h"
 #include <filesystem>
 
-using namespace tinygltf;
-
+namespace tg = tinygltf;
 namespace fs = std::filesystem;
 
 static Vec3 get_vec3(const std::vector<double> &v) {
@@ -19,7 +18,7 @@ static Vec3 get_vec3(const std::vector<double> &v) {
     return {(float)v[0], (float)v[1], (float)v[2]};
 }
 
-static Mat4 get_transform(const Node &node) {
+static Mat4 get_transform(const tg::Node &node) {
     if (node.matrix.size()) {
         // matrix is in column major order
 
@@ -94,8 +93,8 @@ static Mat4 get_transform(const Node &node) {
     return forward;
 }
 
-static void parse_camera(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
-    const Camera &scene_cam = model.cameras[node.camera];
+static void parse_camera(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
+    const tg::Camera &scene_cam = model.cameras[node.camera];
 
     if (scene_cam.type != "perspective") {
         log_error("unsupported camera type: %s\n", scene_cam.type.c_str());
@@ -117,8 +116,8 @@ static void parse_camera(temp_scene_t &scene, const Model &model, const Node &no
     scene.cameras.push_back(cam);
 }
 
-static void parse_light(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
-    const Light &modelLight = model.lights[node.light];
+static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
+    const tg::Light &modelLight = model.lights[node.light];
 
     light_t light;
 
@@ -165,7 +164,7 @@ static void print_material(const material_t *material) {
     log_trace("  IoR: %.2f\n", material->ior);
 }
 
-static void parse_material(temp_scene_t &scene, const tinygltf::Material &sceneMat) {
+static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
     material_t mat;
 
     strncpy(mat.name, sceneMat.name.c_str(), MATERIAL_NAME_SIZE - 1);
@@ -211,10 +210,10 @@ static void parse_material(temp_scene_t &scene, const tinygltf::Material &sceneM
     scene.materials.push_back(mat);
 }
 
-static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, int accIndex, int arity) {
-    const Accessor &acc = model.accessors[accIndex];
-    const BufferView &bufView = model.bufferViews[acc.bufferView];
-    const Buffer &buf = model.buffers[bufView.buffer];
+static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &model, int accIndex, int arity) {
+    const tg::Accessor &acc = model.accessors[accIndex];
+    const tg::BufferView &bufView = model.bufferViews[acc.bufferView];
+    const tg::Buffer &buf = model.buffers[bufView.buffer];
 
     assert(arity == 2 || arity == 3);
 
@@ -259,10 +258,10 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const Model &model, 
     // log_trace("%lu vec3 parsed in given min and max:\n", acc.count);
 }
 
-static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &model, int accIndex) {
-    const Accessor &acc = model.accessors[accIndex];
-    const BufferView &bufView = model.bufferViews[acc.bufferView];
-    const Buffer &buf = model.buffers[bufView.buffer];
+static void scene_parse_acc_indices(std::vector<uint32_t> &list, const tg::Model &model, int accIndex) {
+    const tg::Accessor &acc = model.accessors[accIndex];
+    const tg::BufferView &bufView = model.bufferViews[acc.bufferView];
+    const tg::Buffer &buf = model.buffers[bufView.buffer];
 
     assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
 
@@ -308,13 +307,13 @@ static void scene_parse_acc_indices(std::vector<uint32_t> &list, const Model &mo
     log_trace("Indices scanned in range [%d, %d]\n", min, max);
 }
 
-static void parse_mesh(temp_scene_t &scene, const Model &model, const Node &node, const Mat4 &modelTransform) {
+static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
     log_trace("Parsing mesh of node: %s\n", node.name.c_str());
 
-    const Mesh &mesh = model.meshes[node.mesh];
+    const tg::Mesh &mesh = model.meshes[node.mesh];
     Mat3 linearModelTransform = modelTransform.getLinearPart();
 
-    for (const Primitive &prim : mesh.primitives) {
+    for (const tg::Primitive &prim : mesh.primitives) {
         log_trace("Parsing primitive\n");
 
         if (prim.material < 0 || prim.material >= (int)scene.materials.size()) {
@@ -412,7 +411,7 @@ static void parse_mesh(temp_scene_t &scene, const Model &model, const Node &node
     log_trace("Done with mesh\n");
 }
 
-static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node &node, Mat4 parentTransform) {
+static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, Mat4 parentTransform) {
     Mat4 nodeForwardTransform = get_transform(node);
     Mat4 modelTransform = parentTransform * nodeForwardTransform;
 
@@ -427,7 +426,7 @@ static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node
     }
 
     for (const int &childIndex : node.children) {
-        const Node &child = model.nodes[childIndex];
+        const tg::Node &child = model.nodes[childIndex];
         scene_parse_node(scene, model, child, modelTransform);
     }
 }
@@ -435,11 +434,11 @@ static void scene_parse_node(temp_scene_t &scene, const Model &model, const Node
 void scene_parse_gltf(scene_t &finalScene, const char *filename) {
     log_info("Parsing .gltf... \n");
 
-    tinygltf::Model model;
-    tinygltf::TinyGLTF loader;
+    tg::Model model;
+    tg::TinyGLTF loader;
     std::string err;
     std::string warn;
-    const std::string ext = GetFilePathExtension(filename);
+    const std::string ext = tg::GetFilePathExtension(filename);
 
     bool ret = false;
     if (ext.compare("glb") == 0) {
@@ -507,7 +506,7 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
 
     // MATERIALS
 
-    for (const tinygltf::Image &img : model.images) {
+    for (const tg::Image &img : model.images) {
         log_trace("img.name %s\n", img.name);
     }
 
@@ -519,9 +518,9 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
 
     // NODES
 
-    Scene &modelScene = model.scenes[model.defaultScene];
+    tg::Scene &modelScene = model.scenes[model.defaultScene];
     for (const int &nodeIndex : modelScene.nodes) {
-        const Node &node = model.nodes[nodeIndex];
+        const tg::Node &node = model.nodes[nodeIndex];
         scene_parse_node(tempScene, model, node, Mat4::Identity());
     }
 

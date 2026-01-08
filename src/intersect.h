@@ -19,8 +19,6 @@ struct intersection_t {
     const material_t *mat;
 };
 
-PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
-                             intersection_t &hit, int faceIndex);
+__device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit, int faceIndex);
 
-PLATFORM void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray,
-                              intersection_t &hit);
+__device__ void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit);

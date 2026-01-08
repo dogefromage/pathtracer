@@ -1,5 +1,6 @@
 #pragma once
 
+#include "logger.h"
 #include "mathops.h"
 
 void print_stacktrace();

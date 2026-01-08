@@ -7,16 +7,14 @@
 //     vec3_add(out, ray->o, out);
 // }
 
-static PLATFORM Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t,
-                                        float u, float v) {
+static __device__ Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t, float u, float v) {
     return t * A + u * B + v * C;
 }
 
 #define TRIANGLE_DETERMINANT_EPS 1e-12
 #define TRIANGLE_MARGIN_EPS 1e-12
-static PLATFORM int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0,
-                                               const Vec3 &vert1, const Vec3 &vert2, float *t,
-                                               float *u, float *v) {
+static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0, const Vec3 &vert1, const Vec3 &vert2,
+                                                 float *t, float *u, float *v) {
     Vec3 edge1, edge2, tvec, pvec, qvec;
     float det, inv_det;
 
@@ -85,8 +83,7 @@ static PLATFORM int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0
     return 1;
 }
 
-PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
-                             intersection_t &hit, int faceIndex) {
+__device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit, int faceIndex) {
     const face_t &face = scene->faces[faceIndex];
 
     // loop over n-gon triangles fan-style
@@ -124,9 +121,8 @@ PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
                 hit.true_normal = face.faceNormal;
                 break;
             case BARY_SHADING:
-                hit.true_normal =
-                    barycentric_lincom(scene->vertices[a].normal, scene->vertices[b].normal,
-                                       scene->vertices[c].normal, t, u, v);
+                hit.true_normal = barycentric_lincom(scene->vertices[a].normal, scene->vertices[b].normal,
+                                                     scene->vertices[c].normal, t, u, v);
                 hit.true_normal.normalize();
                 break;
             }
@@ -146,8 +142,7 @@ PLATFORM void intersect_face(const __restrict__ scene_t *scene, const Ray &ray,
     }
 }
 
-PLATFORM void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray,
-                              intersection_t &hit) {
+__device__ void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit) {
     for (size_t i = 0; i < scene->faces.count; i++) {
         intersect_face(scene, ray, hit, i);
     }

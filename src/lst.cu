@@ -62,7 +62,7 @@ void lst_free_device(lst_t *d_lst) {
     device_free(d_lst);
 }
 
-// PLATFORM void
+// __device__ void
 // lst_sample_point_light(light_sample_t& sample, const light_t& light, const scene_t* scene,
 // rand_state_t& rstate) {
 //     sample.p = 1;
@@ -70,13 +70,13 @@ void lst_free_device(lst_t *d_lst) {
 //     sample.light = light.color * light.intensity;
 // }
 
-// PLATFORM void
+// __device__ void
 // lst_sample_directional_light(light_sample_t& sample, const light_t& light, const scene_t*
 // scene, rand_state_t& rstate) {
 //     assert(false);
 // }
 
-// PLATFORM void
+// __device__ void
 // lst_sample(light_sample_t& sample, const lst_t* lst, const scene_t* scene, rand_state_t&
 // rstate) {
 //     // if (!lst->nodes.count) {

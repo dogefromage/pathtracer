@@ -9,7 +9,7 @@ CUDA_LINK_LIBS= -lcudart -lcurand
 # CC_FLAGS = -Wall -Wextra -g -G -I./include -std=gnu99
 
 NVCC = nvcc
-NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall" -g -G
+NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall -Wno-format-truncation" #  -g -G
 
 #-O3 
 #--use_fast_math

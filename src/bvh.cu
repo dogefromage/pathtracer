@@ -69,8 +69,7 @@ struct Bin {
 };
 
 // https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
-static float find_best_split_plane(const scene_t &scene, bvh_t &bvh, bvh_node_t &node,
-                                   int *bestAxis, float *bestSplit) {
+static float find_best_split_plane(const scene_t &scene, bvh_t &bvh, bvh_node_t &node, int *bestAxis, float *bestSplit) {
     AABB centroidBounds;
     for (size_t i = node.start; i < node.end; i++) {
         const Vec3 &c = bvh.centroids[bvh.indices[i]];
@@ -133,8 +132,7 @@ static float find_best_split_plane(const scene_t &scene, bvh_t &bvh, bvh_node_t 
     return bestCost;
 }
 
-static void subdivide(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_stats_t &stats,
-                      int depth) {
+static void subdivide(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_stats_t &stats, int depth) {
     stats.maxDepth = std::max(stats.maxDepth, depth);
 
     bvh_node_t &node = bvh.nodes[nodeIndex];
@@ -186,8 +184,7 @@ static void subdivide(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_
     subdivide(scene, bvh, rightIndex, stats, depth + 1);
 }
 
-static void calculate_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex,
-                            bvh_stats_t &stats) {
+static void calculate_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_stats_t &stats) {
     stats.numberLeaves = 0;
     stats.averageLeafSize = 0;
     for (uint32_t i = 0; i < bvh.nodeCount; i++) {
@@ -201,8 +198,7 @@ static void calculate_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex
     stats.averageLeafSize /= stats.numberLeaves;
 }
 
-static void print_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex,
-                        bvh_stats_t &stats) {
+static void print_stats(const scene_t &scene, bvh_t &bvh, uint32_t nodeIndex, bvh_stats_t &stats) {
     log_trace("\nbvh_t stats:\n");
     log_trace("  node count = %u\n", bvh.nodeCount);
     log_trace("  optimal node count = %u\n", bvh.nodes.count);
@@ -263,8 +259,8 @@ void bvh_build(bvh_t &bvh, const scene_t &scene) {
     bvh.centroids.items = NULL;
 
     if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
-        log_error("bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n",
-                  stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
+        log_error("bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n", stats.maxDepth,
+                  BVH_TRAVERSAL_STACK_SIZE);
         exit(EXIT_FAILURE);
     }
 
@@ -307,8 +303,7 @@ void bvh_free_device(bvh_t *d_bvh) {
 
 #define RAY_NO_HIT 1e30f
 
-static PLATFORM float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec3 &r_inv,
-                                     float min_t) {
+static __device__ float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec3 &r_inv, float min_t) {
     Vec3 t1 = (aabb.min - ray.o) * r_inv;
     Vec3 t2 = (aabb.max - ray.o) * r_inv;
     Vec3 tminv = Vec3::min(t1, t2);
@@ -324,9 +319,8 @@ static PLATFORM float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec
     }
 }
 
-PLATFORM void bvh_intersect_iterative(const __restrict__ bvh_t *bvh,
-                                      const __restrict__ scene_t *scene, const Ray &ray,
-                                      intersection_t &hit) {
+__device__ void bvh_intersect_iterative(const __restrict__ bvh_t *bvh, const __restrict__ scene_t *scene, const Ray &ray,
+                                        intersection_t &hit) {
     Vec3 r_inv = 1.0 / ray.r;
 
     bvh_node_t *stack[BVH_TRAVERSAL_STACK_SIZE];

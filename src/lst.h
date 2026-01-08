@@ -30,6 +30,6 @@ void lst_free_device(lst_t *d_lst);
 //     float p;
 // } light_sample_t;
 
-// PLATFORM void
+// __device__ void
 // lst_sample(light_sample_t& light, const lst_t* lst, const scene_t* scene, rand_state_t&
 // rstate);

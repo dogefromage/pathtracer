@@ -51,8 +51,7 @@ template <typename T> struct fixed_array {
     }
 };
 
-template <typename T>
-void fixed_array_from_vector(fixed_array<T> &dest, const std::vector<T> &src) {
+template <typename T> void fixed_array_from_vector(fixed_array<T> &dest, const std::vector<T> &src) {
     dest.count = src.size();
     dest.items = (T *)malloc(sizeof(T) * dest.count);
     std::copy(src.begin(), src.end(), dest.items);
@@ -117,8 +116,7 @@ struct Vec3 {
     }
 
     MATH_PLATFORM Vec3 cross(const Vec3 &other) const {
-        return Vec3(SUB(MUL(y, other.z), MUL(z, other.y)),
-                    SUB(MUL(z, other.x), MUL(x, other.z)),
+        return Vec3(SUB(MUL(y, other.z), MUL(z, other.y)), SUB(MUL(z, other.x), MUL(x, other.z)),
                     SUB(MUL(x, other.y), MUL(y, other.x)));
     }
 
@@ -137,8 +135,7 @@ struct Vec3 {
     }
 
     MATH_PLATFORM bool epsilonEquals(const Vec3 &other, float epsilon = 1e-6f) const {
-        return (fabs(SUB(x, other.x)) < epsilon) && (fabs(SUB(y, other.y)) < epsilon) &&
-               (fabs(SUB(z, other.z)) < epsilon);
+        return (fabs(SUB(x, other.x)) < epsilon) && (fabs(SUB(y, other.y)) < epsilon) && (fabs(SUB(z, other.z)) < epsilon);
     }
 
     MATH_PLATFORM float operator[](int k) const {
@@ -246,8 +243,7 @@ inline std::ostream &operator<<(std::ostream &os, const Vec3 &a) {
 struct Mat3 {
     float m[3][3];
 
-    MATH_PLATFORM Mat3(float m00, float m01, float m02, float m10, float m11, float m12,
-                       float m20, float m21, float m22) {
+    MATH_PLATFORM Mat3(float m00, float m01, float m02, float m10, float m11, float m12, float m20, float m21, float m22) {
         m[0][0] = m00;
         m[0][1] = m01;
         m[0][2] = m02;
@@ -270,8 +266,7 @@ struct Vec4 {
     float x, y, z, w;
 
     // Constructor
-    MATH_PLATFORM Vec4(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 0.0f)
-        : x(x), y(y), z(z), w(w) {
+    MATH_PLATFORM Vec4(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 0.0f) : x(x), y(y), z(z), w(w) {
     }
 
     // Set all components to the same value
@@ -344,8 +339,8 @@ struct Vec4 {
 
     // Epsilon-based equality check
     MATH_PLATFORM bool epsilonEquals(const Vec4 &other, float epsilon = 1e-5f) const {
-        return (fabs(SUB(x, other.x)) < epsilon) && (fabs(SUB(y, other.y)) < epsilon) &&
-               (fabs(SUB(z, other.z)) < epsilon) && (fabs(SUB(w, other.w)) < epsilon);
+        return (fabs(SUB(x, other.x)) < epsilon) && (fabs(SUB(y, other.y)) < epsilon) && (fabs(SUB(z, other.z)) < epsilon) &&
+               (fabs(SUB(w, other.w)) < epsilon);
     }
 
     // Access components by index (const)
@@ -389,13 +384,11 @@ struct Vec4 {
 
     // Min and max
     MATH_PLATFORM static Vec4 min(const Vec4 &a, const Vec4 &b) {
-        return Vec4(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z,
-                    a.w < b.w ? a.w : b.w);
+        return Vec4(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z, a.w < b.w ? a.w : b.w);
     }
 
     MATH_PLATFORM static Vec4 max(const Vec4 &a, const Vec4 &b) {
-        return Vec4(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z,
-                    a.w > b.w ? a.w : b.w);
+        return Vec4(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z, a.w > b.w ? a.w : b.w);
     }
 
     // Min and max components
@@ -446,9 +439,8 @@ struct Mat4 {
     float m[4][4];
 
     // Constructor to initialize the matrix with individual values
-    MATH_PLATFORM Mat4(float m00, float m01, float m02, float m03, float m10, float m11,
-                       float m12, float m13, float m20, float m21, float m22, float m23,
-                       float m30, float m31, float m32, float m33) {
+    MATH_PLATFORM Mat4(float m00, float m01, float m02, float m03, float m10, float m11, float m12, float m13, float m20,
+                       float m21, float m22, float m23, float m30, float m31, float m32, float m33) {
         m[0][0] = m00;
         m[0][1] = m01;
         m[0][2] = m02;
@@ -473,14 +465,10 @@ struct Mat4 {
 
     // Matrix-vector multiplication
     MATH_PLATFORM Vec4 operator*(const Vec4 &v) const {
-        return Vec4(ADD(ADD(ADD(MUL(m[0][0], v.x), MUL(m[0][1], v.y)), MUL(m[0][2], v.z)),
-                        MUL(m[0][3], v.w)),
-                    ADD(ADD(ADD(MUL(m[1][0], v.x), MUL(m[1][1], v.y)), MUL(m[1][2], v.z)),
-                        MUL(m[1][3], v.w)),
-                    ADD(ADD(ADD(MUL(m[2][0], v.x), MUL(m[2][1], v.y)), MUL(m[2][2], v.z)),
-                        MUL(m[2][3], v.w)),
-                    ADD(ADD(ADD(MUL(m[3][0], v.x), MUL(m[3][1], v.y)), MUL(m[3][2], v.z)),
-                        MUL(m[3][3], v.w)));
+        return Vec4(ADD(ADD(ADD(MUL(m[0][0], v.x), MUL(m[0][1], v.y)), MUL(m[0][2], v.z)), MUL(m[0][3], v.w)),
+                    ADD(ADD(ADD(MUL(m[1][0], v.x), MUL(m[1][1], v.y)), MUL(m[1][2], v.z)), MUL(m[1][3], v.w)),
+                    ADD(ADD(ADD(MUL(m[2][0], v.x), MUL(m[2][1], v.y)), MUL(m[2][2], v.z)), MUL(m[2][3], v.w)),
+                    ADD(ADD(ADD(MUL(m[3][0], v.x), MUL(m[3][1], v.y)), MUL(m[3][2], v.z)), MUL(m[3][3], v.w)));
     }
 
     // Matrix-matrix multiplication
@@ -490,10 +478,8 @@ struct Mat4 {
 
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < 4; ++j) {
-                result.m[i][j] =
-                    ADD(ADD(ADD(MUL(m[i][0], rhs.m[0][j]), MUL(m[i][1], rhs.m[1][j])),
-                            MUL(m[i][2], rhs.m[2][j])),
-                        MUL(m[i][3], rhs.m[3][j]));
+                result.m[i][j] = ADD(ADD(ADD(MUL(m[i][0], rhs.m[0][j]), MUL(m[i][1], rhs.m[1][j])), MUL(m[i][2], rhs.m[2][j])),
+                                     MUL(m[i][3], rhs.m[3][j]));
             }
         }
         return result;
@@ -503,8 +489,7 @@ struct Mat4 {
         // assumes rotation/translation/scale matrix
         assert(m[3][0] == 0 && m[3][1] == 0 && m[3][2] == 0);
 
-        return Mat3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1],
-                    m[2][2]);
+        return Mat3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]);
     }
 };
 
@@ -537,8 +522,7 @@ struct AABB {
     }
 
     __host__ void print() {
-        printf("[ (%.2f,%.2f,%.2f), (%.2f,%.2f,%.2f) ]\n", min.x, min.y, min.z, max.x, max.y,
-               max.z);
+        printf("[ (%.2f,%.2f,%.2f), (%.2f,%.2f,%.2f) ]\n", min.x, min.y, min.z, max.x, max.y, max.z);
     }
 };
 
