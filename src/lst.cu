@@ -3,7 +3,7 @@
 #include "utils.h"
 #include <vector>
 
-void lst_build(lst_t &lst, const scene_t &scene) {
+void lst_build(lst_t &lst, const Scene &scene) {
     log_info("Building LST... \n");
 
     std::vector<lst_node_t> lss;

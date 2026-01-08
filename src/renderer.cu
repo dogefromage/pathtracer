@@ -13,28 +13,28 @@
 #include "scene.h"
 
 struct context_t {
-    const __restrict__ scene_t *scene;
-    const __restrict__ bvh_t *bvh;
-    const __restrict__ lst_t *lst;
+    const Scene &scene;
+    const bvh_t *bvh;
+    const lst_t *lst;
     const config_t cfg;
     rand_state_t rstate;
 
-    __device__ context_t(const scene_t *_scene, const bvh_t *_bvh, const lst_t *_lst, config_t _cfg)
+    __device__ context_t(const Scene &_scene, const bvh_t *_bvh, const lst_t *_lst, config_t _cfg)
         : scene(_scene), bvh(_bvh), lst(_lst), cfg(_cfg) {
     }
 };
 
-static __device__ void get_camera_ray(Ray &ray, const __restrict__ scene_t *scene, float u, float v) {
-    const Vec3 &P = scene->camera.position;
-    const Vec3 &T = scene->camera.target;
-    const Vec3 &Up = scene->camera.updir;
+static __device__ void get_camera_ray(Ray &ray, const Scene &scene, float u, float v) {
+    const Vec3 &P = scene.camera.position;
+    const Vec3 &T = scene.camera.target;
+    const Vec3 &Up = scene.camera.updir;
 
     Vec3 W = T - P;
     Vec3 U = W.cross(Up);
     Vec3 V = U.cross(W);
 
     float focal_length = 0.1; // doesn't really matter at this point
-    float yheight = atanf(0.5 * scene->camera.yfov) * focal_length;
+    float yheight = atanf(0.5 * scene.camera.yfov) * focal_length;
 
     U = U.normalized() * yheight;
     V = V.normalized() * yheight;
@@ -62,8 +62,7 @@ static __device__ void initialize_safe_ray(Ray &ray, const Vec3 &origin, const V
     ray.r = dir;
 }
 
-static __device__ void intersect(const __restrict__ bvh_t *bvh, const __restrict__ scene_t *scene, const Ray &ray,
-                                 intersection_t &hit) {
+static __device__ void intersect(const bvh_t *bvh, const Scene &scene, const Ray &ray, intersection_t &hit) {
 #ifdef USE_INTERSECT_CRUDE
     intersect_crude(scene, ray, hit);
 #else
@@ -94,13 +93,13 @@ struct area_light_sample_t {
 };
 static __device__ void sample_area_light(area_light_sample_t &out, context_t &c, const Vec3 &shadow_pos,
                                          const Vec3 &shadow_normal, int face_index, bool direction_given) {
-    const face_t &face = c.scene->faces[face_index];
-    const material_t &mat = c.scene->materials[face.material];
+    const face_t &face = c.scene.faces[face_index];
+    const material_t &mat = c.scene.materials[face.material];
     assert(face.vertexCount == 3);
 
-    const Vec3 &A = c.scene->vertices[face.vertices[0]].position;
-    const Vec3 &B = c.scene->vertices[face.vertices[1]].position;
-    const Vec3 &C = c.scene->vertices[face.vertices[2]].position;
+    const Vec3 &A = c.scene.vertices[face.vertices[0]].position;
+    const Vec3 &B = c.scene.vertices[face.vertices[1]].position;
+    const Vec3 &C = c.scene.vertices[face.vertices[2]].position;
 
     Vec3 tri_cross = (C - B).cross(A - B);
     float tri_cross_length = tri_cross.magnitude();
@@ -159,7 +158,7 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
     out.p_lss = 1.0f / (float)c.lst->nodes.count;
 
     if (node.type == LST_SOURCE_LIGHT) {
-        const light_t &light = c.scene->lights[node.index];
+        const light_t &light = c.scene.lights[node.index];
 
         if (light.type == LIGHT_POINT) {
             // TODO check maths to add radius
@@ -226,8 +225,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
 
         out.dir_hit_to_light = als.dir_hit_to_light;
 
-        const face_t &face = c.scene->faces[node.index];
-        const material_t &mat = c.scene->materials[face.material];
+        const face_t &face = c.scene.faces[node.index];
+        const material_t &mat = c.scene.materials[face.material];
         Vec3 radiosity = mat.emissive;
 
         out.incoming_radiance = radiosity; // TODO is this correct ???
@@ -335,43 +334,6 @@ static __device__ Vec3 integrate_Li(context_t &c, Ray ray) {
     return light;
 }
 
-#ifdef USE_CPU_RENDER
-
-__host__ void render_host(Vec3 *img, const __restrict__ bvh_t *bvh, const __restrict__ obj_scene_data *scene, int pixel_x,
-                          int pixel_y, settings_t settings, int previous_samples) {
-    uint64_t tid = pixel_y * settings.width + pixel_x;
-
-    rand_state_t rstate;
-    random_init(rstate, settings.seed, tid);
-
-    Vec3 total_light = {0, 0, 0};
-
-    for (int i = 0; i < settings.samples; i++) {
-        // float sensor_variance = 0.33;
-        float sensor_x = (float)pixel_x; /* TODO sensor variance */
-        float sensor_y = (float)pixel_y; /* TODO sensor variance */
-
-        float u = (2 * sensor_x - settings.width) / (float)settings.height;
-        float v = (2 * sensor_y - settings.height) / (float)settings.height;
-
-        Ray camera_ray;
-        get_camera_ray(camera_ray, scene, u, v, settings);
-
-        Vec3 current_light = integrate_Li_iterative(bvh, scene, camera_ray, rstate);
-        total_light += current_light;
-    }
-
-    total_light /= (float)settings.samples_per_round;
-
-    int total_samples = settings.samples_per_round + previous_samples;
-    Vec3 &pixel = img[pixel_y * settings.width + pixel_x];
-
-    pixel =
-        pixel * (previous_samples / (float)total_samples) + total_light * (settings.samples_per_round / (float)total_samples);
-}
-
-#else
-
 // static __device__ Vec3
 // sphere_sample_uniform(rand_state_t& rstate) {
 //     Vec3 r;
@@ -418,8 +380,8 @@ __host__ void render_host(Vec3 *img, const __restrict__ bvh_t *bvh, const __rest
 //     printf("sum of p = %f\n", 4 * 3.1415 * prob / N);
 // }
 
-__global__ void render_kernel(Vec3 *img, const __restrict__ bvh_t *bvh, const __restrict__ scene_t *scene,
-                              const __restrict__ lst_t *lst, config_t cfg, int previousSamples, int currentSamples) {
+__global__ void render_kernel(Vec3 *img, const bvh_t *bvh, const Scene scene, const lst_t *lst, config_t cfg,
+                              int previousSamples, int currentSamples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
@@ -475,5 +437,3 @@ __global__ void render_kernel(Vec3 *img, const __restrict__ bvh_t *bvh, const __
 
     img[pixel_y * cfg.resolution_x + pixel_x] = next_pixel;
 }
-
-#endif

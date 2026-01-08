@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "mathops.h"
+#include "utils.h"
 
 #define MATERIAL_NAME_SIZE 32
 #define MAX_FACE_VERTICES 3
@@ -57,15 +58,6 @@ typedef struct {
 } camera_t;
 
 typedef struct {
-    fixed_array<vertex_t> vertices;
-    fixed_array<face_t> faces;
-    fixed_array<material_t> materials;
-    fixed_array<light_t> lights;
-
-    camera_t camera;
-} scene_t;
-
-typedef struct {
     std::vector<vertex_t> vertices;
     std::vector<face_t> faces;
     std::vector<material_t> materials;
@@ -74,8 +66,33 @@ typedef struct {
     std::vector<camera_t> cameras;
 } temp_scene_t;
 
-void scene_parse_gltf(scene_t &scene, const char *filename);
-void scene_delete_host(scene_t &scene);
+// typedef struct {
+//     fixed_array<vertex_t> vertices;
+//     fixed_array<face_t> faces;
+//     fixed_array<material_t> materials;
+//     fixed_array<light_t> lights;
 
-void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene);
-void free_device_scene(scene_t *dev_scene);
+//     camera_t camera;
+// } scene_t;
+
+// void scene_parse_gltf(scene_t &scene, const char *filename);
+// void scene_delete_host(scene_t &scene);
+// void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene);
+// void free_device_scene(scene_t *dev_scene);
+
+class Scene {
+
+    CudaLocation _location = CudaLocation::Host;
+
+  public:
+    fixed_array<vertex_t> vertices;
+    fixed_array<face_t> faces;
+    fixed_array<material_t> materials;
+    fixed_array<light_t> lights;
+
+    camera_t camera;
+
+    void read_gltf(const char *filename);
+    void device_from_host(const Scene &h_scene);
+    void _free();
+};

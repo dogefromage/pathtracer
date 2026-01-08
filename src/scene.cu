@@ -431,7 +431,7 @@ static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const 
     }
 }
 
-void scene_parse_gltf(scene_t &finalScene, const char *filename) {
+void Scene::read_gltf(const char *filename) {
     log_info("Parsing .gltf... \n");
 
     tg::Model model;
@@ -524,7 +524,9 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
         scene_parse_node(tempScene, model, node, Mat4::Identity());
     }
 
-    // FINALIZE
+    // FINALIZE CLASS
+
+    this->_location = CudaLocation::Host;
 
     if (tempScene.cameras.size() == 0) {
         log_warning("No camera found in scene! Placing default camera.\n");
@@ -537,61 +539,53 @@ void scene_parse_gltf(scene_t &finalScene, const char *filename) {
     } else if (tempScene.cameras.size() > 1) {
         log_warning("Multiple cameras found in scene, choosing camera 0.\n");
     }
-    finalScene.camera = tempScene.cameras[0];
+
+    this->camera = tempScene.cameras[0];
 
     if (tempScene.lights.size() == 0) {
         log_info("No lights found in scene.\n");
     }
 
     // copy into final scene
-    fixed_array_from_vector(finalScene.vertices, tempScene.vertices);
-    fixed_array_from_vector(finalScene.faces, tempScene.faces);
-    fixed_array_from_vector(finalScene.materials, tempScene.materials);
-    fixed_array_from_vector(finalScene.lights, tempScene.lights);
+    fixed_array_from_vector(this->vertices, tempScene.vertices);
+    fixed_array_from_vector(this->faces, tempScene.faces);
+    fixed_array_from_vector(this->materials, tempScene.materials);
+    fixed_array_from_vector(this->lights, tempScene.lights);
 
     log_info("Done parsing .gltf\n");
 }
 
-void scene_delete_host(scene_t &scene) {
-    free(scene.vertices.items);
-    scene.vertices.items = NULL;
-
-    free(scene.faces.items);
-    scene.faces.items = NULL;
-
-    free(scene.materials.items);
-    scene.materials.items = NULL;
-
-    free(scene.lights.items);
-    scene.lights.items = NULL;
-}
-
-void scene_copy_to_device(scene_t **dev_scene, scene_t *host_scene) {
+void Scene::device_from_host(const Scene &h_scene) {
     log_info("Copying scene to device... \n");
+    _location = CudaLocation::Device;
 
-    scene_t placeholder = *host_scene;
     size_t totalSize = 0;
-
-    totalSize += copy_device_fixed_array(&placeholder.vertices, &host_scene->vertices);
-    totalSize += copy_device_fixed_array(&placeholder.faces, &host_scene->faces);
-    totalSize += copy_device_fixed_array(&placeholder.lights, &host_scene->lights);
-    totalSize += copy_device_fixed_array(&placeholder.materials, &host_scene->materials);
-
-    totalSize += copy_device_struct(dev_scene, &placeholder);
+    totalSize += copy_device_fixed_array(&this->vertices, &h_scene.vertices);
+    totalSize += copy_device_fixed_array(&this->faces, &h_scene.faces);
+    totalSize += copy_device_fixed_array(&this->lights, &h_scene.lights);
+    totalSize += copy_device_fixed_array(&this->materials, &h_scene.materials);
 
     char buf[64];
     human_readable_size(buf, totalSize);
     log_info("Done [%s]\n", buf);
 }
 
-void free_device_scene(scene_t *dev_scene) {
-    scene_t placeholder;
-    copy_host_struct(&placeholder, dev_scene);
+void Scene::_free() {
+    if (_location == CudaLocation::Host) {
+        free(vertices.items);
+        vertices.items = NULL;
+        free(faces.items);
+        faces.items = NULL;
+        free(materials.items);
+        materials.items = NULL;
+        free(lights.items);
+        lights.items = NULL;
+    }
 
-    device_free(placeholder.vertices.items);
-    device_free(placeholder.faces.items);
-    device_free(placeholder.lights.items);
-    device_free(placeholder.materials.items);
-
-    device_free(dev_scene);
+    if (_location == CudaLocation::Device) {
+        device_free(vertices.items);
+        device_free(faces.items);
+        device_free(lights.items);
+        device_free(materials.items);
+    }
 }

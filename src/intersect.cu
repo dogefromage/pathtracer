@@ -83,17 +83,17 @@ static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &ver
     return 1;
 }
 
-__device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit, int faceIndex) {
-    const face_t &face = scene->faces[faceIndex];
+__device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_t &hit, int faceIndex) {
+    const face_t &face = scene.faces[faceIndex];
 
     // loop over n-gon triangles fan-style
     for (size_t i = 2; i < face.vertexCount; i++) {
         const uint32_t &b = face.vertices[i - 1];
         const uint32_t &a = face.vertices[0];
         const uint32_t &c = face.vertices[i];
-        const Vec3 &A = scene->vertices[a].position;
-        const Vec3 &B = scene->vertices[b].position;
-        const Vec3 &C = scene->vertices[c].position;
+        const Vec3 &A = scene.vertices[a].position;
+        const Vec3 &B = scene.vertices[b].position;
+        const Vec3 &C = scene.vertices[c].position;
 
         float t, u, v;
         int has_hit = moeller_trumbore_intersect(ray, A, B, C, &t, &u, &v);
@@ -102,18 +102,18 @@ __device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray
             hit.faceIndex = faceIndex;
             hit.has_hit = true;
             hit.distance = t;
-            assert(face.material < (int)scene->materials.count);
+            assert(face.material < (int)scene.materials.count);
 
-            hit.mat = &scene->materials[face.material];
+            hit.mat = &scene.materials[face.material];
 
             float t = 1.0 - u - v;
             hit.position = barycentric_lincom(A, B, C, t, u, v);
 
             // hit.texture_coord.set(0);  // TODO
             // hit.texture_coord = barycentric_lincom(
-            //     scene->vertex_texture_list[a.texture],
-            //     scene->vertex_texture_list[b.texture],
-            //     scene->vertex_texture_list[c.texture],
+            //     scene.vertex_texture_list[a.texture],
+            //     scene.vertex_texture_list[b.texture],
+            //     scene.vertex_texture_list[c.texture],
             //     t, u, v);
 
             switch (face.shading) {
@@ -121,8 +121,8 @@ __device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray
                 hit.true_normal = face.faceNormal;
                 break;
             case BARY_SHADING:
-                hit.true_normal = barycentric_lincom(scene->vertices[a].normal, scene->vertices[b].normal,
-                                                     scene->vertices[c].normal, t, u, v);
+                hit.true_normal =
+                    barycentric_lincom(scene.vertices[a].normal, scene.vertices[b].normal, scene.vertices[c].normal, t, u, v);
                 hit.true_normal.normalize();
                 break;
             }
@@ -142,8 +142,8 @@ __device__ void intersect_face(const __restrict__ scene_t *scene, const Ray &ray
     }
 }
 
-__device__ void intersect_crude(const __restrict__ scene_t *scene, const Ray &ray, intersection_t &hit) {
-    for (size_t i = 0; i < scene->faces.count; i++) {
+__device__ void intersect_crude(const Scene &scene, const Ray &ray, intersection_t &hit) {
+    for (size_t i = 0; i < scene.faces.count; i++) {
         intersect_face(scene, ray, hit, i);
     }
 }

@@ -17,4 +17,4 @@ struct config_t {
     path_t path_gltf, dir_output, path_render;
 };
 
-int load_config(config_t* cfg, int argc, char* argv[]);
+int load_config(config_t *cfg, int argc, char *argv[]);

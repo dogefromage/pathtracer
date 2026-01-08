@@ -19,7 +19,7 @@ typedef struct {
     fixed_array<lst_node_t> nodes;
 } lst_t;
 
-void lst_build(lst_t &lst, const scene_t &scene);
+void lst_build(lst_t &lst, const Scene &scene);
 void lst_free_host(lst_t &lst);
 void lst_copy_device(lst_t **d_lst, const lst_t *h_lst);
 void lst_free_device(lst_t *d_lst);

@@ -16,11 +16,6 @@
 
 int main(int argc, char *argv[]) {
 
-    // printf("argc = %d\n", argc);
-    // for (int i = 0; argv[i]; i++) {
-    //     printf("argv[%d] = %s\n", i, argv[i]);
-    // }
-
     config_t cfg;
 
     if (load_config(&cfg, argc, argv)) {
@@ -35,11 +30,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Scene scene;
-    // scene.read_gltf(cfg.path_gltf);
-
-    scene_t h_scene;
-    scene_parse_gltf(h_scene, cfg.path_gltf);
+    Scene h_scene, d_scene;
+    h_scene.read_gltf(cfg.path_gltf);
+    d_scene.device_from_host(h_scene);
 
     // bounding volume hierarchy
     bvh_t h_bvh;
@@ -54,9 +47,6 @@ int main(int argc, char *argv[]) {
     assert(h_img);
 
     // ########## DISPATCH #############
-
-    scene_t *d_scene;
-    scene_copy_to_device(&d_scene, &h_scene);
 
     bvh_t *d_bvh;
     bvh_copy_device(&d_bvh, &h_bvh);
@@ -122,7 +112,6 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    free_device_scene(d_scene);
     bvh_free_device(d_bvh);
     lst_free_device(d_lst);
 
@@ -132,9 +121,11 @@ int main(int argc, char *argv[]) {
     h_img = NULL;
     bvh_free_host(h_bvh);
     lst_free_host(h_lst);
-    scene_delete_host(h_scene);
 
     log_close();
+
+    h_scene._free();
+    d_scene._free();
 
     return 0;
 }
