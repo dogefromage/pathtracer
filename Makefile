@@ -1,15 +1,14 @@
 
 CUDA_INCLUDE = 
 CUDA_LIB_DIR = 
-# CUDA_INCLUDE = -I/usr/include
-# CUDA_LIB_DIR = -L/usr/lib/x86_64-linux-gnu
 CUDA_LINK_LIBS= -lcudart -lcurand
 
 # CC = gcc
 # CC_FLAGS = -Wall -Wextra -g -G -I./include -std=gnu99
 
 NVCC = nvcc
-NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared --compiler-options "-Wall -Wno-format-truncation -fno-omit-frame-pointer" -g -G
+NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared -arch=sm_89 --compiler-options "-Wall -Wno-format-truncation"
+# -g -G
 
 #-O3 
 #--use_fast_math
@@ -23,7 +22,7 @@ C_SRC_FILES := $(wildcard $(SRC_DIR)/*.c)
 CU_SRC_FILES := $(wildcard $(SRC_DIR)/*.cu)
 OBJ_FILES := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SRC_FILES)) $(patsubst $(SRC_DIR)/%.cu, $(BUILD_DIR)/%.o, $(CU_SRC_FILES))
 
-EXEC_NAME = raytracer
+EXEC_NAME = pathtracer
 # Executable name
 TARGET = $(BIN_DIR)/$(EXEC_NAME)
 
@@ -40,7 +39,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cu
 
 $(TARGET): $(OBJ_FILES)
 	@mkdir -p $(BIN_DIR)
-	$(NVCC) $^ -o $@ $(CUDA_LIB_DIR) $(CUDA_LINK_LIBS)
+	$(NVCC) $^ -o $@ -arch=sm_89 $(CUDA_LIB_DIR) $(CUDA_LINK_LIBS)
 
 #removed -lm because of cuda math library ??
 

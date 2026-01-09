@@ -13,13 +13,28 @@
 #include "lst.h"
 #include "renderer.h"
 #include "utils.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 int main(int argc, char *argv[]) {
+
+    // printf("Waiting 10s for cuda-gdb to attach. PID: %d\n", getpid());
+    // volatile int wait = 1;
+    // while (wait) {
+    //     // spin; gdb can attach anytime
+    // }
+    // sleep(10); // https://docs.nvidia.com/nsight-visual-studio-code-edition/latest/cuda-debugger/index.html
 
     config_t cfg;
 
     if (load_config(&cfg, argc, argv)) {
         return 1;
+    }
+
+    struct stat st = {0};
+    if (stat(cfg.dir_output, &st) == -1) {
+        mkdir(cfg.dir_output, 0700);
     }
 
     path_t log_file;

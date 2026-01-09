@@ -1,6 +1,6 @@
 
 paths:
-  executable: bin/raytracer
+  executable: bin/pathtracer
 
 inputs:
   # - assets/dragon.gltf

@@ -559,6 +559,8 @@ void Scene::device_from_host(const Scene &h_scene) {
     log_info("Copying scene to device... \n");
     _location = CudaLocation::Device;
 
+    *this = h_scene;
+
     size_t totalSize = 0;
     totalSize += copy_device_fixed_array(&this->vertices, &h_scene.vertices);
     totalSize += copy_device_fixed_array(&this->faces, &h_scene.faces);
