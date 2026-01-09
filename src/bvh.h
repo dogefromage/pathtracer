@@ -10,12 +10,12 @@ typedef struct {
     uint32_t start, end;
 } bvh_node_t;
 
-typedef struct {
-    fixed_array<bvh_node_t> nodes;
-    fixed_array<uint32_t> indices;
-    fixed_array<Vec3> centroids;
-    uint32_t nodeCount; //, maxNodeCount, primitiveCount;
-} bvh_t;
+// typedef struct {
+//     fixed_array<bvh_node_t> nodes;
+//     fixed_array<uint32_t> indices;
+//     fixed_array<Vec3> centroids;
+//     uint32_t nodeCount; //, maxNodeCount, primitiveCount;
+// } bvh_t;
 
 typedef struct {
     uint32_t totalSkippedFaces, numberLeaves;
@@ -24,9 +24,18 @@ typedef struct {
     int maxDepth;
 } bvh_stats_t;
 
-void bvh_build(bvh_t &bvh, const Scene &scene);
-void bvh_free_host(bvh_t &h_bvh);
-void bvh_copy_device(bvh_t **d_bvh, const bvh_t *h_bvh);
-void bvh_free_device(bvh_t *d_bvh);
+class BVH {
+    CudaLocation _location = CudaLocation::Host;
 
-__device__ void bvh_intersect_iterative(const __restrict__ bvh_t *bvh, const Scene &scene, const Ray &ray, intersection_t &hit);
+  public:
+    fixed_array<bvh_node_t> nodes;
+    fixed_array<uint32_t> indices;
+    fixed_array<Vec3> centroids;
+    uint32_t nodeCount;
+
+    void build(const Scene &scene);
+    void device_from_host(const BVH &h_bvh);
+    void _free();
+};
+
+__device__ void bvh_intersect_iterative(const BVH &bvh, const Scene &scene, const Ray &ray, intersection_t &hit);

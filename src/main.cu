@@ -19,13 +19,6 @@
 
 int main(int argc, char *argv[]) {
 
-    // printf("Waiting 10s for cuda-gdb to attach. PID: %d\n", getpid());
-    // volatile int wait = 1;
-    // while (wait) {
-    //     // spin; gdb can attach anytime
-    // }
-    // sleep(10); // https://docs.nvidia.com/nsight-visual-studio-code-edition/latest/cuda-debugger/index.html
-
     config_t cfg;
 
     if (load_config(&cfg, argc, argv)) {
@@ -47,15 +40,14 @@ int main(int argc, char *argv[]) {
 
     Scene h_scene, d_scene;
     h_scene.read_gltf(cfg.path_gltf);
-    d_scene.device_from_host(h_scene);
 
     // bounding volume hierarchy
-    bvh_t h_bvh;
-    bvh_build(h_bvh, h_scene);
+    BVH h_bvh, d_bvh;
+    h_bvh.build(h_scene);
 
     // light source tree
-    lst_t h_lst;
-    lst_build(h_lst, h_scene);
+    LST h_lst, d_lst;
+    h_lst.build(h_scene);
 
     size_t img_size = sizeof(Vec3) * cfg.resolution_x * cfg.resolution_y;
     Vec3 *h_img = (Vec3 *)malloc(img_size);
@@ -63,14 +55,11 @@ int main(int argc, char *argv[]) {
 
     // ########## DISPATCH #############
 
-    bvh_t *d_bvh;
-    bvh_copy_device(&d_bvh, &h_bvh);
-
-    lst_t *d_lst;
-    lst_copy_device(&d_lst, &h_lst);
+    d_scene.device_from_host(h_scene);
+    d_bvh.device_from_host(h_bvh);
+    d_lst.device_from_host(h_lst);
 
     cudaError_t err;
-
     Vec3 *d_img;
     err = cudaMalloc(&d_img, img_size);
     if (check_cuda_err(err)) {
@@ -127,20 +116,19 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    bvh_free_device(d_bvh);
-    lst_free_device(d_lst);
-
     // ########## DISPATCH #############
 
     free(h_img);
     h_img = NULL;
-    bvh_free_host(h_bvh);
-    lst_free_host(h_lst);
-
-    log_close();
 
     h_scene._free();
     d_scene._free();
+    h_bvh._free();
+    d_bvh._free();
+    h_lst._free();
+    d_lst._free();
+
+    log_close();
 
     return 0;
 }
