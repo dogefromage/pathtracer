@@ -138,7 +138,10 @@ static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::N
 
     if (modelLight.type == "directional") {
         light.type = LIGHT_DIRECTIONAL;
+        log_trace("parsing directional light: \n");
+
     } else if (modelLight.type == "point") {
+        log_trace("parsing point light: \n");
         light.type = LIGHT_POINT;
     } else {
         log_error("Unsupported light '%s'\n", modelLight.type.c_str());

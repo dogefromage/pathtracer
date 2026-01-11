@@ -2,11 +2,6 @@
 
 #include "intersect.h"
 
-// void Ray_at(mfloat_t* out, Ray* ray, mfloat_t t) {
-//     vec3_multiply_f(out, ray->r, t);
-//     vec3_add(out, ray->o, out);
-// }
-
 static __device__ Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t, float u, float v) {
     return t * A + u * B + v * C;
 }

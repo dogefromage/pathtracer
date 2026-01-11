@@ -128,14 +128,31 @@ static __device__ void sample_area_light(area_light_sample_t &out, context_t &c,
 }
 
 struct light_source_sample_t {
-    Vec3 incoming_radiance;
+    Spectrum incoming_radiance;
     Vec3 dir_hit_to_light;
     float p_lss;
-    // Vec3 Ld;
-    // float p_direct;
-    // bool visible;
-    // bsdf_sample_t light_dir_bsdf;
 };
+
+// https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
+// intensity parameter can be:
+// luminous intensity (point light) or illuminance (area light) or luminance (light ray)
+// color will be normalized and scalar will be multiplied with intensity
+static __device__ Spectrum rgb_to_radiometric(Vec3 color, float intensity) {
+    float color_magnitude = color.magnitude();
+    Vec3 color_normalized = Vec3::Const(1);
+    if (color_magnitude > 1e-12) {
+        // for if color is black
+        color_normalized = color / color_magnitude;
+    }
+    Spectrum spectrum = Spectrum::fromRGB(color_normalized);
+    float photometric_intensity = intensity * color_magnitude; // for simplicity multiply with color norm
+
+    // stems from relationship between
+    float alpha = photometric_intensity / (683.0 * spectrum.luminance());
+    Spectrum radiometric_spectrum = spectrum * alpha;
+    // radiant intensity (point light) or irradiance (area light) or radiance (light ray)
+    return radiometric_spectrum;
+}
 
 static __device__ void sample_light_source(light_source_sample_t &out, context_t &c, const Ray &ray,
                                            const intersection_t &hit) {
@@ -155,8 +172,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
 
         if (light.type == LIGHT_POINT) {
             // TODO check maths to add radius
-            // float light_rad = 0.1;
             Vec3 light_pos = light.position;
+            // float light_rad = 0.1;
             // + light_rad * sphere_sample_uniform(c.rstate);
 
             Vec3 dir_hit_to_light = light_pos - hit.position;
@@ -174,20 +191,16 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
                 return;
             }
 
-            // https: //
-            // github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
-            // https://physics.stackexchange.com/questions/382755/converting-illumination-to-irradiance#383501
-            // this is only approximation, color spaces are violated
-            float watts_per_lumen = 1.0 / 683.0;
-            float radiant_intensity = light.intensity * watts_per_lumen;
-            Vec3 light_radiance = light.color * radiant_intensity / (distance * distance);
+            Spectrum radiant_intensity = rgb_to_radiometric(light.color, light.intensity);
+            // for some reason, weird maths
+            Spectrum radiance = radiant_intensity / (distance * distance);
 
-            out.incoming_radiance = light_radiance;
+            out.incoming_radiance = radiance;
             out.p_lss *= 1;
             return;
 
         } else {
-            // directional light: TODO
+            // directional light
 
             out.dir_hit_to_light = -light.direction;
             out.dir_hit_to_light.normalize();
@@ -202,10 +215,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
                 return;
             }
 
-            float watts_per_lumen = 1.0 / 683.0;
-            float radiance = light.intensity * watts_per_lumen;
-
-            out.incoming_radiance = light.color * radiance;
+            Spectrum radiance = rgb_to_radiometric(light.color, light.intensity);
+            out.incoming_radiance = radiance;
             out.p_lss *= 1;
             return;
         }
@@ -220,9 +231,11 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
 
         const face_t &face = c.scene.faces[node.index];
         const material_t &mat = c.scene.materials[face.material];
-        Vec3 radiosity = mat.emissive;
 
-        out.incoming_radiance = radiosity; // TODO is this correct ???
+        Spectrum irradiance = rgb_to_radiometric(mat.emissive, 1);
+
+        // cos(theta)/r^2 cancels with dA, therefore radiance == radiosity here
+        out.incoming_radiance = irradiance;
         out.p_lss *= als.p_als;
         return;
     }
@@ -264,23 +277,23 @@ static __device__ float evaluate_direct_p(context_t &c, const Ray &ray, const in
 
 #define RR_PROB_MAX 0.99
 
-static __device__ Vec3 integrate_Li(context_t &c, Ray ray) {
-    Vec3 light = {0, 0, 0};
-    Vec3 throughput = {1, 1, 1};
+static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
+    Spectrum light = Spectrum::Zero();
+    Spectrum throughput = Spectrum::Itentity();
 
     for (int depth = 0;; depth++) {
         intersection_t hit;
         intersect(c.bvh, c.scene, ray, hit);
         if (!hit.has_hit) {
-            light += throughput * c.cfg.world_clear_color;
+            light += throughput * Spectrum::fromRGB(c.cfg.world_clear_color);
             break;
         }
 
         // EMISSIVE LIGHT
-        Vec3 Le = hit.mat->emissive * throughput;
+        Spectrum Le = Spectrum::fromRGB(hit.mat->emissive) * throughput;
         light += Le;
 
-        float rr_prob = fminf(throughput.maxComponent(), RR_PROB_MAX);
+        float rr_prob = fminf(throughput.luminance(), RR_PROB_MAX);
         if (random_uniform(c.rstate) >= rr_prob) {
             break; // ray dies
         }
@@ -295,7 +308,7 @@ static __device__ Vec3 integrate_Li(context_t &c, Ray ray) {
             evaluate_bsdf(lss_bsdf, ray.r, lss.dir_hit_to_light, hit, c.rstate);
 
             float cos_theta_x = std::abs(hit.true_normal.dot(lss.dir_hit_to_light));
-            Vec3 direct_outgoing_radiance = lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
+            Spectrum direct_outgoing_radiance = lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
 
             // balance heuristic on part of direct light
             float weight = lss.p_lss / (lss.p_lss + lss_bsdf.prob_i);
@@ -322,59 +335,11 @@ static __device__ Vec3 integrate_Li(context_t &c, Ray ray) {
         throughput *= indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
     }
 
-    CHECK_VEC(light);
-
     return light;
 }
 
-// static __device__ Vec3
-// sphere_sample_uniform(rand_state_t& rstate) {
-//     Vec3 r;
-//     do {
-//         r.x = 2 * random_uniform(rstate) - 1;
-//         r.y = 2 * random_uniform(rstate) - 1;
-//         r.z = 2 * random_uniform(rstate) - 1;
-//     } while (r.dot(r) > 1);
-
-//     return r.normalized();
-// }
-
-// static __device__ void
-// sanity_check(context_t& c) {
-
-//     float a = 3;
-//     Vec3 p;
-//     p.x = 2 * a * random_uniform(c.rstate) - a;
-//     p.y = 2 * a * random_uniform(c.rstate) - a;
-//     p.z = 2 * a * random_uniform(c.rstate) - a;
-
-//     intersection_t test_hit = {
-//         has_hit: true,
-//         distance: 0,
-//         position: p,
-//         lightingNormal: Vec3(1, 0, 0),
-//         trueNormal: Vec3(1, 0, 0),
-//         faceIndex: -1,
-//         mat: nullptr,
-//     };
-
-//     int N = 100000;
-//     float prob = 0;
-
-//     for (int i = 0; i < N; i++) {
-
-//         Vec3 r = sphere_sample_uniform(c.rstate);
-
-//         Ray ray = { o: p, r: r };
-
-//         prob += evaluate_direct_p(c, ray, test_hit);
-//     }
-
-//     printf("sum of p = %f\n", 4 * 3.1415 * prob / N);
-// }
-
-__global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const LST lst, config_t cfg, int previousSamples,
-                              int currentSamples) {
+__global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const LST lst, config_t cfg, int previous_samples,
+                              int current_samples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
@@ -388,9 +353,9 @@ __global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const
 
     random_init(c.rstate, cfg.seed, curand_tid);
 
-    Vec3 total_light = {0, 0, 0};
+    Spectrum total_light = Spectrum::Zero();
 
-    for (int i = 0; i < currentSamples; i++) {
+    for (int i = 0; i < current_samples; i++) {
         float sensor_variance = 0.33;
         float sensor_x = (float)pixel_x + sensor_variance * random_normal(c.rstate);
         float sensor_y = (float)pixel_y + sensor_variance * random_normal(c.rstate);
@@ -401,32 +366,20 @@ __global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const
         Ray camera_ray;
         get_camera_ray(camera_ray, scene, u, v);
 
-        // intersection_t hit;
-        // intersect(c.bvh, c.scene, camera_ray, hit);
-        // Vec3 current_light;
-        // if (hit.has_hit) {
-        //     current_light = {1, 1, 1};
-        // } else {
-        //     current_light = {0, 0, 0};
-        // }
-
-        Vec3 current_light = integrate_Li(c, camera_ray);
-
-        // Vec3 current_light = integrate_Li_classic(bvh, scene, lst, camera_ray, rstate,
-        // settings);
-
+        Spectrum current_light = integrate_Li(c, camera_ray);
         total_light += current_light;
     }
 
     total_light *= 2; // test exposure
 
-    total_light /= (float)currentSamples;
+    total_light /= (float)current_samples;
+    Vec3 pixel_color = total_light.toRGB();
 
-    int total_samples = previousSamples + currentSamples;
+    int total_samples = previous_samples + current_samples;
     Vec3 last_pixel = img[pixel_y * cfg.resolution_x + pixel_x];
 
     Vec3 next_pixel =
-        last_pixel * (previousSamples / (float)total_samples) + total_light * (currentSamples / (float)total_samples);
+        last_pixel * (previous_samples / (float)total_samples) + pixel_color * (current_samples / (float)total_samples);
 
     img[pixel_y * cfg.resolution_x + pixel_x] = next_pixel;
 }

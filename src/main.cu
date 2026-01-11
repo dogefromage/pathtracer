@@ -93,6 +93,7 @@ int main(int argc, char *argv[]) {
 
         cudaMemcpy(h_img, d_img, img_size, cudaMemcpyDeviceToHost);
         write_image(h_img, cfg.resolution_x, cfg.resolution_y, cfg.path_render);
+        log_trace("Updated image: %s\n", cfg.path_render);
 
         renderedSamples += currentSamples;
 

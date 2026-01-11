@@ -11,24 +11,12 @@
 
 #include "headers.h"
 
-#define TEST(x) (x)
-// #define TEST(x) test_finite(x)
-
-// #ifdef USE_CPU_RENDER
-#define ADD(x, y) TEST((x) + (y))
-#define SUB(x, y) TEST((x) - (y))
-#define MUL(x, y) TEST((x) * (y))
-#define DIV(x, y) TEST((x) / (y))
-#define FMADD(x, y, z) TEST((x) * (y) + (z)) // Fused multiply-add
-#define SQRT(x) TEST(sqrtf(x))
-// #else
-// #define ADD(x, y) (__fadd_rn((x), (y)))
-// #define SUB(x, y) (__fsub_rn((x), (y)))
-// #define MUL(x, y) (__fmul_rn((x), (y)))
-// #define DIV(x, y) (__frcp_rn((y)) * (x))  // Fast reciprocal multiply
-// #define FMADD(x, y, z) (__fmaf_rn((x), (y), (z)))
-// #define SQRT(x) (sqrtf(x))
-// #endif
+#define ADD(x, y) ((x) + (y))
+#define SUB(x, y) ((x) - (y))
+#define MUL(x, y) ((x) * (y))
+#define DIV(x, y) ((x) / (y))
+#define FMADD(x, y, z) ((x) * (y) + (z)) // Fused multiply-add
+#define SQRT(x) (sqrtf(x))
 
 #define MATH_PLATFORM __host__ __device__
 
@@ -530,3 +518,71 @@ struct AABB {
 struct Ray {
     Vec3 o, r;
 };
+
+struct Spectrum {
+
+  private:
+    Vec3 rgb;
+
+    MATH_PLATFORM Spectrum(Vec3 _rgb) : rgb(_rgb) {
+    }
+
+  public:
+    MATH_PLATFORM Spectrum() : rgb(Vec3::Zero()) {
+    }
+
+    MATH_PLATFORM static Spectrum fromRGB(Vec3 rgb) {
+        return {rgb};
+    }
+
+    MATH_PLATFORM Vec3 toRGB() {
+        return rgb;
+    }
+
+    MATH_PLATFORM static Spectrum Zero() {
+        return Spectrum(Vec3::Zero());
+    }
+
+    MATH_PLATFORM static Spectrum Itentity() {
+        return Spectrum(Vec3::Const(1));
+    }
+
+    MATH_PLATFORM float luminance() {
+        return rgb.x * 0.2126f + rgb.y * 0.7152f + rgb.z * 0.0722f;
+    }
+
+    MATH_PLATFORM Spectrum operator+(const Spectrum &other) const {
+        return Spectrum(rgb + other.rgb);
+    }
+    MATH_PLATFORM Spectrum operator*(const Spectrum &other) const {
+        return Spectrum(rgb * other.rgb);
+    }
+    MATH_PLATFORM Spectrum operator*(float scalar) const {
+        return Spectrum(rgb * scalar);
+    }
+
+    MATH_PLATFORM Spectrum operator/(float scalar) const {
+        float t = DIV(1.0, scalar);
+        return *this * t;
+    }
+};
+
+inline MATH_PLATFORM void operator+=(Spectrum &lhs, const Spectrum &rhs) {
+    lhs = lhs + rhs;
+}
+
+inline MATH_PLATFORM Spectrum operator*(float scalar, Spectrum lhs) {
+    return lhs * scalar;
+}
+
+inline MATH_PLATFORM void operator*=(Spectrum &lhs, const Spectrum &rhs) {
+    lhs = lhs * rhs;
+}
+
+inline MATH_PLATFORM void operator*=(Spectrum &lhs, float scalar) {
+    lhs = lhs * scalar;
+}
+
+inline MATH_PLATFORM void operator/=(Spectrum &lhs, float scalar) {
+    lhs = lhs / scalar;
+}

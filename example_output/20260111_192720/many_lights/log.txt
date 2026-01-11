@@ -1,0 +1,121 @@
+[INFO] Parsing .gltf... 
+[TRACE] Material:
+[TRACE]   Name: WHITE
+[TRACE]   Color: (0.80, 0.80, 0.80)
+[TRACE]   Transmission: 0.00
+[TRACE]   Emissive: (0.00, 0.00, 0.00)
+[TRACE]   Metallic: 0.00
+[TRACE]   Roughness: 0.50
+[TRACE]   IoR: 1.33
+[TRACE] Material:
+[TRACE]   Name: RED
+[TRACE]   Color: (1.00, 0.00, 0.00)
+[TRACE]   Transmission: 0.00
+[TRACE]   Emissive: (0.00, 0.00, 0.00)
+[TRACE]   Metallic: 0.00
+[TRACE]   Roughness: 0.50
+[TRACE]   IoR: 1.33
+[TRACE] Material:
+[TRACE]   Name: BLUE
+[TRACE]   Color: (0.00, 0.00, 1.00)
+[TRACE]   Transmission: 0.00
+[TRACE]   Emissive: (0.00, 0.00, 0.00)
+[TRACE]   Metallic: 0.00
+[TRACE]   Roughness: 0.50
+[TRACE]   IoR: 1.33
+[TRACE] Material:
+[TRACE]   Name: WHITE.001
+[TRACE]   Color: (0.80, 0.80, 0.80)
+[TRACE]   Transmission: 0.00
+[TRACE]   Emissive: (0.00, 0.00, 0.00)
+[TRACE]   Metallic: 0.00
+[TRACE]   Roughness: 0.50
+[TRACE]   IoR: 1.33
+[TRACE] Material:
+[TRACE]   Name: EMIT
+[TRACE]   Color: (0.00, 0.00, 0.00)
+[TRACE]   Transmission: 0.00
+[TRACE]   Emissive: (5.00, 5.00, 5.00)
+[TRACE]   Metallic: 0.00
+[TRACE]   Roughness: 0.50
+[TRACE]   IoR: 1.33
+[TRACE] Parsing mesh of node: Cube
+[TRACE] Parsing primitive
+[TRACE] Scanning NORMAL
+[TRACE] Scanning POSITION
+[TRACE] Scanning TEXCOORD_0
+[TRACE] Scanning INDICES
+[TRACE] Indices scanned in range [0, 11]
+[TRACE] Adding faces
+[TRACE] Done with primitive
+[TRACE] Parsing primitive
+[TRACE] Scanning NORMAL
+[TRACE] Scanning POSITION
+[TRACE] Scanning TEXCOORD_0
+[TRACE] Scanning INDICES
+[TRACE] Indices scanned in range [0, 3]
+[TRACE] Adding faces
+[TRACE] Done with primitive
+[TRACE] Parsing primitive
+[TRACE] Scanning NORMAL
+[TRACE] Scanning POSITION
+[TRACE] Scanning TEXCOORD_0
+[TRACE] Scanning INDICES
+[TRACE] Indices scanned in range [0, 3]
+[TRACE] Adding faces
+[TRACE] Done with primitive
+[TRACE] Done with mesh
+[TRACE] Parsing mesh of node: pp-exported.002
+[TRACE] Parsing primitive
+[TRACE] Scanning NORMAL
+[TRACE] Scanning POSITION
+[TRACE] Scanning TEXCOORD_0
+[TRACE] Scanning INDICES
+[TRACE] Indices scanned in range [0, 182284]
+[TRACE] Adding faces
+[TRACE] Done with primitive
+[TRACE] Done with mesh
+[TRACE] parsing point light: 
+[TRACE] parsing directional light: 
+[TRACE] Parsing mesh of node: Plane
+[TRACE] Parsing primitive
+[TRACE] Scanning NORMAL
+[TRACE] Scanning POSITION
+[TRACE] Scanning TEXCOORD_0
+[TRACE] Scanning INDICES
+[TRACE] Indices scanned in range [0, 3]
+[TRACE] Adding faces
+[TRACE] Done with primitive
+[TRACE] Done with mesh
+[INFO] Done parsing .gltf
+[INFO] Building BVH...  
+[TRACE] created 109897 bvh nodes (of at most 645607)
+[TRACE] created 334369 bvh nodes (of at most 645607)
+[TRACE] 
+bvh_t stats:
+[TRACE]   node count = 390441
+[TRACE]   optimal node count = 645607
+[TRACE]   number leafs = 195221
+[TRACE]   skipped faces = 0 / 322804 = 0.000
+[TRACE]   average leaf size = 1.65
+[TRACE]   max tree height =  27
+[INFO] Done building BVH
+[INFO] Building LST... 
+[INFO] Done building LST
+[INFO] Copying scene to device... 
+[INFO] Done [18MB]
+[INFO] Copying bvh_t to device... 
+[INFO] Done [27MB]
+[INFO] Copying lst_t to device... 
+[INFO] Done [32B]
+[INFO] Launching kernel... 
+[INFO] Rendering 200 samples in batches of 50, img size (1024, 1024)
+[INFO] Kernel params <<<(64,64), (16,16)>>>
+[TRACE] Updated image: output/20260111_192720/many_lights/render.png
+[INFO] Rendered 50 out of 200 S/px in 6.4s - 7.82 S/px/s - 8.20 MS/s
+[TRACE] Updated image: output/20260111_192720/many_lights/render.png
+[INFO] Rendered 100 out of 200 S/px in 12.8s - 7.81 S/px/s - 8.19 MS/s
+[TRACE] Updated image: output/20260111_192720/many_lights/render.png
+[INFO] Rendered 150 out of 200 S/px in 19.2s - 7.80 S/px/s - 8.18 MS/s
+[TRACE] Updated image: output/20260111_192720/many_lights/render.png
+[INFO] Rendered 200 out of 200 S/px in 25.7s - 7.79 S/px/s - 8.17 MS/s

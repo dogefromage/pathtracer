@@ -101,7 +101,7 @@ static __device__ void sample_bsdf_mirror(bsdf_sample_t &out, const Vec3 &v_inv,
     out.omega_i = reflect(hit.incident_normal, v_inv);
     out.prob_i = 1.0;
     float cos_theta = out.omega_i.dot(hit.incident_normal);
-    out.bsdf.set(1.0 / cos_theta);
+    out.bsdf = Spectrum::Itentity() / cos_theta;
 }
 
 static __device__ void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit,
@@ -130,7 +130,7 @@ static __device__ void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, 
         out.omega_i = refract(n1, n2, hit.incident_normal, v_inv);
         out.prob_i = 1 - R;
         float cos_theta = std::abs(out.omega_i.dot(hit.incident_normal));
-        out.bsdf.set((1 - R) / cos_theta);
+        out.bsdf = (1 - R) / cos_theta * Spectrum::Itentity();
     }
 }
 
@@ -157,7 +157,7 @@ __device__ void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const interse
 
     // diffuse
     out.omega_i = hemi_sample_uniform(hit.incident_normal, rstate);
-    out.bsdf = hit.mat->color / M_PIf;
+    out.bsdf = Spectrum::fromRGB(hit.mat->color) / M_PIf;
     out.prob_i = 1.0 / (2 * M_PIf);
 
     // UNIFORM
@@ -175,14 +175,14 @@ __device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 
     // bool isGlass = false;
     bool isGlass = hit.mat->transmission >= 0.9;
     if (isGlass) {
-        out.bsdf.set(0);
+        out.bsdf = Spectrum::Zero();
         out.prob_i = 0;
     }
 
     bool isMirror = hit.mat->metallic >= 0.9;
     if (isMirror) {
         // probability is zero since mirror does not allow direct light
-        out.bsdf.set(0);
+        out.bsdf = Spectrum::Zero();
         out.prob_i = 0;
         return;
     }
@@ -192,6 +192,6 @@ __device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 
     // out.prob_i = std::abs(hit.true_normal.dot(w));
 
     // diffuse
-    out.bsdf = hit.mat->color / M_PIf;
+    out.bsdf = Spectrum::fromRGB(hit.mat->color) / M_PIf;
     out.prob_i = 1.0 / (2 * M_PIf);
 }

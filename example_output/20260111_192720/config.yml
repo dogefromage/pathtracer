@@ -1,10 +1,10 @@
 paths:
-  executable: bin/raytracer
+  executable: bin/pathtracer
 inputs:
 - assets/many_lights.gltf
 pathtracer:
   logger:
-    log-level: 3
+    log-level: 4
     log-stdout: true
   output:
     resolution-x: 1024

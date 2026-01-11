@@ -4,7 +4,8 @@
 
 typedef struct {
     float prob_i;
-    Vec3 omega_i, bsdf;
+    Vec3 omega_i;
+    Spectrum bsdf;
 } bsdf_sample_t;
 
 __device__ Vec3 sphere_sample_uniform(rand_state_t &rstate);

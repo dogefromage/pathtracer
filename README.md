@@ -59,7 +59,7 @@ bin/raytracer
 [INFO] Rendered 200 out of 200 S/px in 33.8s - 5.91 S/px/s - 6.20 MS/s
 ```
 
-![Latest render](/example_output/20250808_004357/many_lights/render.png)
+![Latest render](/example_output/20260111_192720/many_lights/render.png)
 
 ## Currently implements:
 * basic path tracing on gpu using CUDA or optionally using CPU

@@ -37,6 +37,6 @@ pathtracer:
     samples-every-update: 50
 
   world:
-    # clear-color: 0 0 0
-    clear-color: 1 1 1
+    clear-color: 0 0 0
+    # clear-color: 1 1 1
     # clear-color: 0.509 0.607 0.768
