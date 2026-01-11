@@ -464,21 +464,21 @@ void Scene::read_gltf(const char *filename) {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "loaded glTF file has:\n"
-              << model.accessors.size() << " accessors\n"
-              << model.animations.size() << " animations\n"
-              << model.buffers.size() << " buffers\n"
-              << model.bufferViews.size() << " bufferViews\n"
-              << model.materials.size() << " materials\n"
-              << model.meshes.size() << " meshes\n"
-              << model.nodes.size() << " nodes\n"
-              << model.textures.size() << " textures\n"
-              << model.images.size() << " images\n"
-              << model.skins.size() << " skins\n"
-              << model.samplers.size() << " samplers\n"
-              << model.cameras.size() << " cameras\n"
-              << model.scenes.size() << " scenes\n"
-              << model.lights.size() << " lights\n";
+    log_trace("Loaded gltf contains:\n");
+    log_trace("  %d accessors\n", model.accessors.size());
+    log_trace("  %d animations\n", model.animations.size());
+    log_trace("  %d buffers\n", model.buffers.size());
+    log_trace("  %d bufferViews\n", model.bufferViews.size());
+    log_trace("  %d materials\n", model.materials.size());
+    log_trace("  %d meshes\n", model.meshes.size());
+    log_trace("  %d nodes\n", model.nodes.size());
+    log_trace("  %d textures\n", model.textures.size());
+    log_trace("  %d images\n", model.images.size());
+    log_trace("  %d skins\n", model.skins.size());
+    log_trace("  %d samplers\n", model.samplers.size());
+    log_trace("  %d cameras\n", model.cameras.size());
+    log_trace("  %d scenes\n", model.scenes.size());
+    log_trace("  %d lights\n", model.lights.size());
 
     temp_scene_t tempScene;
 
