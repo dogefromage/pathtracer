@@ -9,9 +9,9 @@ inputs:
   # - assets/glass_mirror.gltf
   # - assets/cornell.gltf
   # - assets/two_lights.gltf
-  - assets/many_lights.gltf
+  # - assets/many_lights.gltf
   # - assets/Sponza.gltf
-  # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
+  - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
 
 pathtracer:
 
@@ -37,6 +37,6 @@ pathtracer:
     samples-every-update: 50
 
   world:
-    clear-color: 0 0 0
-    # clear-color: 1 1 1
+    # clear-color: 0 0 0
+    clear-color: 1 1 1
     # clear-color: 0.509 0.607 0.768

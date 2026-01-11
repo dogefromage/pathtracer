@@ -53,8 +53,9 @@ template <typename T> void copy_host_struct(T *host, const T *dev) {
 inline void device_free(void *devp) {
     cudaError_t err;
     err = cudaFree(devp);
-    if (check_cuda_err(err))
+    if (check_cuda_err(err)) {
         exit(EXIT_FAILURE);
+    }
 }
 
 void human_readable_size(char *buf, size_t bytes);

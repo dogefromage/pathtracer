@@ -93,7 +93,6 @@ int main(int argc, char *argv[]) {
 
         cudaMemcpy(h_img, d_img, img_size, cudaMemcpyDeviceToHost);
         write_image(h_img, cfg.resolution_x, cfg.resolution_y, cfg.path_render);
-        log_trace("Updated image: %s\n", cfg.path_render);
 
         renderedSamples += currentSamples;
 
@@ -110,6 +109,7 @@ int main(int argc, char *argv[]) {
         log_info("Rendered %d out of %d S/px in %.1fs - %.2f "
                  "S/px/s - %.2f MS/s\n",
                  renderedSamples, cfg.samples, elapsedTime, samplesPerPixelSecond, megaSamplesPerSecond);
+        log_trace("Updated image: %s\n", cfg.path_render);
     }
 
     err = cudaFree(d_img);
@@ -123,11 +123,12 @@ int main(int argc, char *argv[]) {
     h_img = NULL;
 
     h_scene._free();
-    d_scene._free();
     h_bvh._free();
-    d_bvh._free();
     h_lst._free();
-    d_lst._free();
+    // somehow crashes idk why
+    // d_scene._free();
+    // d_bvh._free();
+    // d_lst._free();
 
     log_close();
 
