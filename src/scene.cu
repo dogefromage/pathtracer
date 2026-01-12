@@ -1,15 +1,20 @@
 #include "scene.h"
 
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <iostream>
 
 #include "config.h"
 #include "logger.h"
-#include "tiny_gltf.h"
 #include "utils.h"
 #include <filesystem>
+
+// do not define STB_IMAGE_IMPLEMENTATION here, all stuff is included in a single location
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
+
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
+#include "tiny_gltf/tiny_gltf.h"
 
 namespace tg = tinygltf;
 namespace fs = std::filesystem;
@@ -720,7 +725,6 @@ void Scene::read_gltf(const char *filename, config_t &config) {
     log_trace("  %d lights\n", model.lights.size());
 
     temp_scene_t temp_scene;
-    cudaError_t cuerr;
     std::vector<image_resource_t> image_resources;
     std::vector<cudaTextureObject_t> textures;
 
@@ -782,7 +786,7 @@ void Scene::read_gltf(const char *filename, config_t &config) {
         // dummy_camera.updir = {0, 0, 1};
         // dummy_camera.yfov = 0.7;
 
-        dummy_camera.position = {0, 0, 3};
+        dummy_camera.position = {0, 0, 5};
         dummy_camera.target = {0, 0, 0};
         dummy_camera.updir = {0, 1, 0};
         dummy_camera.yfov = 0.8;

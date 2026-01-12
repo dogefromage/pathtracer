@@ -5,8 +5,8 @@
 #include "image.h"
 #include "logger.h"
 
-#define STBI_ONLY_PNG
-#include "stb_image_write.h"
+// do not define STB_IMAGE_IMPLEMENTATION here, all stuff is included in a single location
+#include "stb/stb_image_write.h"
 
 uint8_t clamp_256(float c) {
     if (c < 0.0)
