@@ -263,6 +263,10 @@ struct Vec4 {
         x = y = z = w = a;
     }
 
+    MATH_PLATFORM Vec3 xyz() const {
+        return {x, y, z};
+    }
+
     // Print vector components
     void print() const {
         printf("(%.2f, %.2f, %.2f, %.2f)\n", x, y, z, w);

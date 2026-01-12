@@ -10,18 +10,22 @@
 #define MAX_FACE_VERTICES 3
 
 typedef struct {
-    Vec3 position;
     /* if no normals passed, normal field set to (0,0,0)
      * and face shading is set to SHADING_FLAT
      */
-    Vec3 normal;
-    Vec3 texcoord;
+    Vec3 position, normal, texcoord0;
 
 } vertex_t;
 
 enum face_shading_t {
     FLAT_SHADING,
     BARY_SHADING,
+};
+
+enum alpha_mode_t {
+    ALPHA_OPAQUE,
+    ALPHA_MASK,
+    ALPHA_BLEND,
 };
 
 typedef struct {
@@ -34,9 +38,12 @@ typedef struct {
 
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
-    Vec3 color, emissive;
-    uint32_t textureColor;
+    Vec4 baseColorFactor;
+    Vec3 emissive;
+    int32_t textureColor; // -1 means no texture
     float metallic, roughness, ior, transmission;
+    alpha_mode_t alphaMode;
+    float alphaCutoff;
 } material_t;
 
 enum light_type_t {
@@ -58,10 +65,17 @@ typedef struct {
 } camera_t;
 
 typedef struct {
+    cudaResourceDesc resource;
+    int channels;
+} image_resource_t;
+
+typedef struct {
     std::vector<vertex_t> vertices;
     std::vector<face_t> faces;
     std::vector<material_t> materials;
     std::vector<light_t> lights;
+    std::vector<cudaTextureObject_t> textures;
+    std::vector<image_resource_t> image_resources;
 
     std::vector<camera_t> cameras;
 } temp_scene_t;
@@ -89,6 +103,7 @@ class Scene {
     fixed_array<face_t> faces;
     fixed_array<material_t> materials;
     fixed_array<light_t> lights;
+    fixed_array<cudaTextureObject_t> textures;
 
     camera_t camera;
 

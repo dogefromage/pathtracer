@@ -18,6 +18,11 @@ static Vec3 get_vec3(const std::vector<double> &v) {
     return {(float)v[0], (float)v[1], (float)v[2]};
 }
 
+static Vec4 get_vec4(const std::vector<double> &v) {
+    assert(v.size() >= 4);
+    return {(float)v[0], (float)v[1], (float)v[2], (float)v[3]};
+}
+
 static Mat4 get_transform(const tg::Node &node) {
     if (node.matrix.size()) {
         // matrix is in column major order
@@ -159,7 +164,9 @@ static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::N
 static void print_material(const material_t *material) {
     log_trace("Material:\n");
     log_trace("  Name: %s\n", material->name);
-    log_trace("  Color: (%.2f, %.2f, %.2f)\n", material->color.x, material->color.y, material->color.z);
+    log_trace("  BaseColorFactor: (%.2f, %.2f, %.2f; %.2f)\n", material->baseColorFactor.x, material->baseColorFactor.y,
+              material->baseColorFactor.z, material->baseColorFactor.w);
+    log_trace("  Color texture: (%d)\n", material->textureColor);
     log_trace("  Transmission: %.2f\n", material->transmission);
     log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y, material->emissive.z);
     log_trace("  Metallic: %.2f\n", material->metallic);
@@ -191,9 +198,20 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
         }
     }
 
+    if (sceneMat.alphaMode == "OPAQUE") {
+        mat.alphaMode = ALPHA_OPAQUE;
+    }
+    if (sceneMat.alphaMode == "MASK") {
+        mat.alphaMode = ALPHA_MASK;
+    }
+    if (sceneMat.alphaMode == "BLEND") {
+        mat.alphaMode = ALPHA_BLEND;
+    }
+    mat.alphaCutoff = sceneMat.alphaCutoff;
+
     // SET MATERIAL VALUES
 
-    mat.color = get_vec3(sceneMat.pbrMetallicRoughness.baseColorFactor);
+    mat.baseColorFactor = get_vec4(sceneMat.pbrMetallicRoughness.baseColorFactor);
     mat.emissive = emissiveStrength * get_vec3(sceneMat.emissiveFactor);
     mat.metallic = (float)sceneMat.pbrMetallicRoughness.metallicFactor;
     mat.roughness = (float)sceneMat.pbrMetallicRoughness.roughnessFactor;
@@ -228,6 +246,11 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
         hasGivenBounds = true;
         givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1], (float)acc.minValues[2]};
         givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1], (float)acc.maxValues[2]};
+        if (arity == 2) {
+            givenBounds.min.z = -1e10f;
+            givenBounds.max.z = 1e10f;
+        }
+        // log_trace("Bounds given: (%.2f, %.2f, %.2f), (%.2f, %.2f, %.2f)}")
     }
 
     assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
@@ -246,6 +269,10 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
         }
         // v.print();
         out.push_back(v);
+
+        // if (arity == 2) {
+        //     printf("texcoord0: (%f, %f)\n", v.x, v.y);
+        // }
 
         actualBounds.grow(v);
 
@@ -374,9 +401,9 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
             }
 
             if (hasTexcoord0) {
-                v.texcoord = texcoord0[i];
+                v.texcoord0 = texcoord0[i];
             } else {
-                v.texcoord.set(0);
+                v.texcoord0.set(0);
             }
 
             scene.vertices.push_back(v);
@@ -434,6 +461,63 @@ static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const 
     }
 }
 
+static cudaTextureDesc createCudaTextureDescFromGLTF(int minFilter, int magFilter, int wrapS, int wrapT, bool mipmaps) {
+    cudaTextureDesc desc = {};
+
+    auto gltfWrapToCuda = [](int wrap) {
+        switch (wrap) {
+        case TINYGLTF_TEXTURE_WRAP_REPEAT:
+            return cudaAddressModeWrap;
+        case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
+            return cudaAddressModeClamp;
+        case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
+            return cudaAddressModeMirror;
+        default:
+            return cudaAddressModeWrap;
+        }
+    };
+
+    desc.addressMode[0] = gltfWrapToCuda(wrapS);
+    desc.addressMode[1] = gltfWrapToCuda(wrapT);
+    desc.addressMode[2] = cudaAddressModeWrap; // for 3D textures
+
+    auto gltfFilterToCuda = [](int filter) {
+        switch (filter) {
+        case TINYGLTF_TEXTURE_FILTER_NEAREST:
+        case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST:
+        case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR:
+            return cudaFilterModePoint;
+        case TINYGLTF_TEXTURE_FILTER_LINEAR:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST:
+        case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR:
+            return cudaFilterModeLinear;
+        default:
+            return cudaFilterModeLinear;
+        }
+    };
+
+    desc.filterMode = gltfFilterToCuda(magFilter); // prioritize magFilter
+
+    // ---- Mipmaps ----
+    if (mipmaps) {
+        // Only enable if you have a mipmapped CUDA array
+        desc.mipmapFilterMode = gltfFilterToCuda(minFilter);
+        desc.maxMipmapLevelClamp = 1000.0f; // allow all mip levels
+        desc.minMipmapLevelClamp = 0.0f;
+    } else {
+        desc.mipmapFilterMode = cudaFilterModePoint; // ignored
+        desc.maxMipmapLevelClamp = 0.0f;
+        desc.minMipmapLevelClamp = 0.0f;
+    }
+
+    desc.normalizedCoords = 1;                   // use [0,1] texture coordinates
+    desc.readMode = cudaReadModeNormalizedFloat; // uchar -> float
+    desc.sRGB = 1;
+    desc.maxAnisotropy = 1;
+
+    return desc;
+}
+
 void Scene::read_gltf(const char *filename) {
     log_info("Parsing .gltf... \n");
 
@@ -480,13 +564,11 @@ void Scene::read_gltf(const char *filename) {
     log_trace("  %d scenes\n", model.scenes.size());
     log_trace("  %d lights\n", model.lights.size());
 
-    temp_scene_t tempScene;
+    temp_scene_t temp_scene;
+    cudaError_t cuerr;
 
     // IMAGES
-
     for (const auto &img : model.images) {
-        // log_trace("img.name %s\n", img.name);
-        // log_trace("img.mimeType %s\n", img.mimeType.c_str());
 
         fs::path img_name = img.uri.c_str();
         fs::path path_gltf = filename;
@@ -494,29 +576,109 @@ void Scene::read_gltf(const char *filename) {
 
         log_trace("img.uri %s\n", img.uri.c_str());
         log_trace("path_img %s\n", path_img.c_str());
-        int width, height, components;
-        unsigned char *data = stbi_load(path_img.c_str(), &width, &height, &components, STBI_default);
-        log_trace("img: (w=%d, h=%d, components=%d)\n", width, height, components);
+
+        // get initial info of image
+        int width, height, actual_components;
+        if (!stbi_info(path_img.c_str(), &width, &height, &actual_components)) {
+            assert(false);
+        }
+
+        int loaded_components = -1;
+        cudaChannelFormatDesc channelDesc;
+
+        switch (actual_components) {
+        // case 1:
+        //     desired_components = components;
+        //     channelDesc = cudaCreateChannelDesc<uchar>();
+        //     break;
+        // case 2:
+        //     desired_components = components;
+        //     channelDesc = cudaCreateChannelDesc<uchar2>();
+        //     break;
+        case 3:
+        case 4:
+            loaded_components = 4;
+            channelDesc = cudaCreateChannelDesc<uchar4>();
+            break;
+        default:
+            log_error("Cannot interpret image with %d components\n", actual_components);
+            exit(EXIT_FAILURE);
+            break;
+        }
+
+        log_trace("Image (w=%d, h=%d, actual_components=%d, loaded_components=%d)\n", width, height, actual_components,
+                  loaded_components);
+
+        // finally load image with desired components
+        unsigned char *data = stbi_load(path_img.c_str(), &width, &height, &actual_components, loaded_components);
+        if (!data) {
+            log_error("Failed to load image: %s\n", path_img.c_str());
+            exit(EXIT_FAILURE);
+        }
+        assert(loaded_components != 3);
+
+        // setup array
+        cudaArray_t cuArray;
+        cuerr = cudaMallocArray(&cuArray, &channelDesc, width, height);
+        if (check_cuda_err(cuerr) != cudaSuccess) {
+            log_error("cudaMallocArray(&cuArray, &channelDesc, width, height);\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // copy mem to array
+        size_t copy_size = sizeof(unsigned char) * height * width * loaded_components;
+        cuerr = cudaMemcpyToArray(cuArray, 0, 0, data, copy_size, cudaMemcpyHostToDevice);
+        if (check_cuda_err(cuerr) != cudaSuccess) {
+            log_error("cudaMemcpyToArray(cuArray, 0, 0, data, copy_size, cudaMemcpyHostToDevice);\n");
+            exit(EXIT_FAILURE);
+        }
+
         stbi_image_free(data);
+
+        cudaResourceDesc resDesc{};
+        resDesc.resType = cudaResourceTypeArray;
+        resDesc.res.array.array = cuArray;
+
+        temp_scene.image_resources.push_back({resDesc, loaded_components});
     }
 
     // TEXTURES
-
     for (const auto &tex : model.textures) {
         log_trace("tex.source %d\n", tex.source);
         log_trace("tex.sampler %d\n", tex.sampler);
-    }
 
-    // MATERIALS
+        image_resource_t &resource = temp_scene.image_resources[tex.source];
+        const auto &sampler = model.samplers[tex.sampler];
 
-    for (const tg::Image &img : model.images) {
-        log_trace("img.name %s\n", img.name);
+        bool mipmaps = false; // TODO maybe
+        cudaTextureDesc texDesc =
+            createCudaTextureDescFromGLTF(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT, mipmaps);
+
+        switch (resource.channels) {
+        // case 1:
+        // case 2:
+        //     texDesc.readMode = cudaReadModeElementType;
+        //     break;
+        case 3:
+        case 4:
+            texDesc.readMode = cudaReadModeNormalizedFloat;
+            break;
+        }
+
+        cudaTextureObject_t texObj = 0;
+        cuerr = cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);
+        if (check_cuda_err(cuerr) != cudaSuccess) {
+            log_error("cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);\n");
+            exit(EXIT_FAILURE);
+        }
+
+        temp_scene.textures.push_back(texObj);
     }
 
     // MATERIALS
 
     for (const auto &sceneMat : model.materials) {
-        parse_material(tempScene, sceneMat);
+        parse_material(temp_scene, sceneMat);
     }
 
     // NODES
@@ -524,36 +686,43 @@ void Scene::read_gltf(const char *filename) {
     tg::Scene &modelScene = model.scenes[model.defaultScene];
     for (const int &nodeIndex : modelScene.nodes) {
         const tg::Node &node = model.nodes[nodeIndex];
-        scene_parse_node(tempScene, model, node, Mat4::Identity());
+        scene_parse_node(temp_scene, model, node, Mat4::Identity());
     }
 
     // FINALIZE CLASS
 
     this->_location = CudaLocation::Host;
 
-    if (tempScene.cameras.size() == 0) {
+    if (temp_scene.cameras.size() == 0) {
         log_warning("No camera found in scene! Placing default camera.\n");
-        camera_t cam;
-        cam.position = {1, 1, 1};
-        cam.target = {0, 0, 0};
-        cam.updir = {0, 0, 1};
-        cam.yfov = 0.7;
-        tempScene.cameras.push_back(cam);
-    } else if (tempScene.cameras.size() > 1) {
+        camera_t dummy_camera;
+        // dummy_camera.position = {1, 1, 1};
+        // dummy_camera.target = {0, 0, 0};
+        // dummy_camera.updir = {0, 0, 1};
+        // dummy_camera.yfov = 0.7;
+
+        dummy_camera.position = {0, 0, 15};
+        dummy_camera.target = {0, 0, 0};
+        dummy_camera.updir = {0, 1, 0};
+        dummy_camera.yfov = 0.8;
+
+        temp_scene.cameras.push_back(dummy_camera);
+    } else if (temp_scene.cameras.size() > 1) {
         log_warning("Multiple cameras found in scene, choosing camera 0.\n");
     }
 
-    this->camera = tempScene.cameras[0];
+    this->camera = temp_scene.cameras[0];
 
-    if (tempScene.lights.size() == 0) {
+    if (temp_scene.lights.size() == 0) {
         log_info("No lights found in scene.\n");
     }
 
     // copy into final scene
-    fixed_array_from_vector(this->vertices, tempScene.vertices);
-    fixed_array_from_vector(this->faces, tempScene.faces);
-    fixed_array_from_vector(this->materials, tempScene.materials);
-    fixed_array_from_vector(this->lights, tempScene.lights);
+    fixed_array_from_vector(this->vertices, temp_scene.vertices);
+    fixed_array_from_vector(this->faces, temp_scene.faces);
+    fixed_array_from_vector(this->materials, temp_scene.materials);
+    fixed_array_from_vector(this->lights, temp_scene.lights);
+    fixed_array_from_vector(this->textures, temp_scene.textures);
 
     log_info("Done parsing .gltf\n");
 }
@@ -569,6 +738,7 @@ void Scene::device_from_host(const Scene &h_scene) {
     totalSize += copy_device_fixed_array(&this->faces, &h_scene.faces);
     totalSize += copy_device_fixed_array(&this->lights, &h_scene.lights);
     totalSize += copy_device_fixed_array(&this->materials, &h_scene.materials);
+    totalSize += copy_device_fixed_array(&this->textures, &h_scene.textures);
 
     char buf[64];
     human_readable_size(buf, totalSize);
@@ -585,6 +755,8 @@ void Scene::_free() {
         materials.items = NULL;
         free(lights.items);
         lights.items = NULL;
+        free(textures.items);
+        textures.items = NULL;
     }
 
     if (_location == CudaLocation::Device) {
@@ -592,5 +764,6 @@ void Scene::_free() {
         device_free(faces.items);
         device_free(lights.items);
         device_free(materials.items);
+        device_free(textures.items);
     }
 }

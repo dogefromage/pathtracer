@@ -86,12 +86,12 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
         const uint32_t &b = face.vertices[i - 1];
         const uint32_t &a = face.vertices[0];
         const uint32_t &c = face.vertices[i];
-        const Vec3 &A = scene.vertices[a].position;
-        const Vec3 &B = scene.vertices[b].position;
-        const Vec3 &C = scene.vertices[c].position;
+        const vertex_t &A = scene.vertices[a];
+        const vertex_t &B = scene.vertices[b];
+        const vertex_t &C = scene.vertices[c];
 
         float t, u, v;
-        int has_hit = moeller_trumbore_intersect(ray, A, B, C, &t, &u, &v);
+        int has_hit = moeller_trumbore_intersect(ray, A.position, B.position, C.position, &t, &u, &v);
 
         if (has_hit && t >= 0 && t < hit.distance) {
             hit.faceIndex = faceIndex;
@@ -102,14 +102,34 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             hit.mat = &scene.materials[face.material];
 
             float t = 1.0 - u - v;
-            hit.position = barycentric_lincom(A, B, C, t, u, v);
+            hit.position = barycentric_lincom(A.position, B.position, C.position, t, u, v);
+            hit.texcoord0 = barycentric_lincom(A.texcoord0, B.texcoord0, C.texcoord0, t, u, v);
 
-            // hit.texture_coord.set(0);  // TODO
-            // hit.texture_coord = barycentric_lincom(
-            //     scene.vertex_texture_list[a.texture],
-            //     scene.vertex_texture_list[b.texture],
-            //     scene.vertex_texture_list[c.texture],
-            //     t, u, v);
+            // get color based on https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+            Vec3 color = Vec3::Const(1);
+            float alpha = 1;
+            if (hit.mat->textureColor >= 0) {
+                float4 texLookup = tex2D<float4>(scene.textures[hit.mat->textureColor], hit.texcoord0.x, hit.texcoord0.y);
+                color = Vec3(texLookup.x, texLookup.y, texLookup.z);
+                alpha = texLookup.w;
+            }
+            color *= hit.mat->baseColorFactor.xyz();
+            alpha *= hit.mat->baseColorFactor.w;
+
+            hit.color = color;
+
+            // TODO interpret alpha for some kind of transparency
+            // switch (hit.mat->alphaMode) {
+            // case ALPHA_OPAQUE:
+            //     hit.color = texColor;
+            //     break;
+            // case ALPHA_MASK:
+            //     if (texLookup.w > hit.mat->alphaCutoff) {
+            //         hit.color = texColor;
+            //     }
+            // case ALPHA_BLEND:
+            //     hit.color += lookup.w * (lookup_color - hit.color);
+            // }
 
             switch (face.shading) {
             case FLAT_SHADING:

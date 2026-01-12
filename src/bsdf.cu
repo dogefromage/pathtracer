@@ -152,12 +152,12 @@ __device__ void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const interse
     // // diffuse
     // sample_t sample = hemi_sample_cosine(hit.incident_normal, rstate);
     // out.omega_i = sample.v;
-    // out.bsdf = hit.mat->color / M_PIf;
+    // out.bsdf = hit.color / M_PIf;
     // out.prob_i = sample.p;
 
     // diffuse
     out.omega_i = hemi_sample_uniform(hit.incident_normal, rstate);
-    out.bsdf = Spectrum::fromRGB(hit.mat->color) / M_PIf;
+    out.bsdf = Spectrum::fromRGB(hit.color) / M_PIf;
     out.prob_i = 1.0 / (2 * M_PIf);
 
     // UNIFORM
@@ -188,10 +188,10 @@ __device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 
     }
     // // diffuse
     // out.omega_i = w;
-    // out.bsdf = hit.mat->color / M_PIf;
+    // out.bsdf = hit.color / M_PIf;
     // out.prob_i = std::abs(hit.true_normal.dot(w));
 
     // diffuse
-    out.bsdf = Spectrum::fromRGB(hit.mat->color) / M_PIf;
+    out.bsdf = Spectrum::fromRGB(hit.color) / M_PIf;
     out.prob_i = 1.0 / (2 * M_PIf);
 }

@@ -10,8 +10,10 @@ inputs:
   # - assets/cornell.gltf
   # - assets/two_lights.gltf
   # - assets/many_lights.gltf
-  # - assets/Sponza.gltf
-  - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
+  # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
+  # - ../glTF-Sample-Models/2.0/TextureSettingsTest/glTF/TextureSettingsTest.gltf
+  - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
+  # - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
 
 pathtracer:
 

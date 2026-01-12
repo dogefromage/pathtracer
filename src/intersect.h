@@ -14,8 +14,9 @@ inline std::ostream &operator<<(std::ostream &os, const Ray &ray) {
 struct intersection_t {
     bool has_hit = false;
     float distance = CLEAR_DISTANCE;
-    Vec3 position, incident_normal, true_normal;
+    Vec3 position, incident_normal, true_normal, texcoord0;
     int faceIndex;
+    Vec3 color;
     const material_t *mat;
 };
 
