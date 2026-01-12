@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "config.h"
 #include "mathops.h"
 #include "utils.h"
 
@@ -65,8 +66,9 @@ typedef struct {
 } camera_t;
 
 typedef struct {
-    cudaResourceDesc resource;
+    cudaResourceDesc resourceDesc;
     int channels;
+    int isFloat;
 } image_resource_t;
 
 typedef struct {
@@ -74,8 +76,6 @@ typedef struct {
     std::vector<face_t> faces;
     std::vector<material_t> materials;
     std::vector<light_t> lights;
-    std::vector<cudaTextureObject_t> textures;
-    std::vector<image_resource_t> image_resources;
 
     std::vector<camera_t> cameras;
 } temp_scene_t;
@@ -106,8 +106,10 @@ class Scene {
     fixed_array<cudaTextureObject_t> textures;
 
     camera_t camera;
+    int clearTexture{-1};
+    Vec3 clearColor;
 
-    void read_gltf(const char *filename);
+    void read_gltf(const char *filename, config_t &config);
     void device_from_host(const Scene &h_scene);
     void _free();
 };

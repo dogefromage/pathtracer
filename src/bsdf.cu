@@ -135,19 +135,20 @@ static __device__ void sample_bsdf_glass(bsdf_sample_t &out, const Vec3 &v_inv, 
 }
 
 __device__ void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const intersection_t &hit, rand_state_t &rstate) {
-    // bool isGlass = false;
-    bool isGlass = hit.mat->transmission >= 0.9;
-    if (isGlass) {
-        sample_bsdf_glass(out, v_inv, hit, rstate);
-        return;
-    }
 
-    // bool isMirror = false;
-    bool isMirror = hit.mat->metallic >= 0.9;
-    if (isMirror) {
-        sample_bsdf_mirror(out, v_inv, hit, rstate);
-        return;
-    }
+    // // bool isGlass = false;
+    // bool isGlass = hit.mat->transmission >= 0.9;
+    // if (isGlass) {
+    //     sample_bsdf_glass(out, v_inv, hit, rstate);
+    //     return;
+    // }
+
+    // // bool isMirror = false;
+    // bool isMirror = hit.mat->metallic >= 0.9;
+    // if (isMirror) {
+    //     sample_bsdf_mirror(out, v_inv, hit, rstate);
+    //     return;
+    // }
 
     // // diffuse
     // sample_t sample = hemi_sample_cosine(hit.incident_normal, rstate);
@@ -172,20 +173,21 @@ __device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 
 
     out.omega_i = w;
 
-    // bool isGlass = false;
-    bool isGlass = hit.mat->transmission >= 0.9;
-    if (isGlass) {
-        out.bsdf = Spectrum::Zero();
-        out.prob_i = 0;
-    }
+    // // bool isGlass = false;
+    // bool isGlass = hit.mat->transmission >= 0.9;
+    // if (isGlass) {
+    //     out.bsdf = Spectrum::Zero();
+    //     out.prob_i = 0;
+    // }
 
-    bool isMirror = hit.mat->metallic >= 0.9;
-    if (isMirror) {
-        // probability is zero since mirror does not allow direct light
-        out.bsdf = Spectrum::Zero();
-        out.prob_i = 0;
-        return;
-    }
+    // bool isMirror = hit.mat->metallic >= 0.9;
+    // if (isMirror) {
+    //     // probability is zero since mirror does not allow direct light
+    //     out.bsdf = Spectrum::Zero();
+    //     out.prob_i = 0;
+    //     return;
+    // }
+
     // // diffuse
     // out.omega_i = w;
     // out.bsdf = hit.color / M_PIf;

@@ -65,4 +65,5 @@ if __name__ == "__main__":
         subprocess.run(
             " ".join(command),
             shell=True,
+            stderr=True,
         )

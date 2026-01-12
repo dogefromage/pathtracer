@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "logger.h"
+#include "utils.h"
 
 static int current_log_level = LOG_LEVEL_INFO;
 static FILE *log_file = NULL;
@@ -73,5 +74,6 @@ void log_error(const char *format, ...) {
     va_list args;
     va_start(args, format);
     log_message(LOG_LEVEL_ERROR, "ERROR", format, args);
+    print_stacktrace();
     va_end(args);
 }

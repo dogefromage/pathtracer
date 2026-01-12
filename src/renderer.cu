@@ -55,14 +55,16 @@ static __device__ void get_camera_ray(Ray &ray, const Scene &scene, float u, flo
 // offset new ray slightly from triangle in normal dir
 #define SAVE_RAY_EPS 1e-6
 
-static __device__ void initialize_safe_ray(Ray &ray, const Vec3 &origin, const Vec3 &dir, const Vec3 &normal) {
+static __device__ void initialize_safe_ray(Ray &ray, const Vec3 &origin, const Vec3 &dir,
+                                           const Vec3 &normal) {
     bool transmit = dir.dot(normal) < 0;
 
     ray.o = origin + SAVE_RAY_EPS * (transmit ? -normal : normal);
     ray.r = dir;
 }
 
-static __device__ void intersect(const BVH &bvh, const Scene &scene, const Ray &ray, intersection_t &hit) {
+static __device__ void intersect(const BVH &bvh, const Scene &scene, const Ray &ray,
+                                 intersection_t &hit) {
 #ifdef USE_INTERSECT_CRUDE
     intersect_crude(scene, ray, hit);
 #else
@@ -70,7 +72,8 @@ static __device__ void intersect(const BVH &bvh, const Scene &scene, const Ray &
 #endif
 }
 
-static __device__ Vec3 sample_triangle_uniform(rand_state_t &rstate, const Vec3 &a, const Vec3 &b, const Vec3 &c) {
+static __device__ Vec3 sample_triangle_uniform(rand_state_t &rstate, const Vec3 &a,
+                                               const Vec3 &b, const Vec3 &c) {
     float u1, u2;
     do {
         u1 = random_uniform(rstate);
@@ -84,8 +87,9 @@ struct area_light_sample_t {
     Vec3 normal, dir_hit_to_light;
     float distance, area;
 };
-static __device__ void sample_area_light(area_light_sample_t &out, context_t &c, const Vec3 &shadow_pos,
-                                         const Vec3 &shadow_normal, int face_index, bool direction_given) {
+static __device__ void sample_area_light(area_light_sample_t &out, context_t &c,
+                                         const Vec3 &shadow_pos, const Vec3 &shadow_normal,
+                                         int face_index, bool direction_given) {
     const face_t &face = c.scene.faces[face_index];
     const material_t &mat = c.scene.materials[face.material];
     assert(face.vertexCount == 3);
@@ -111,7 +115,8 @@ static __device__ void sample_area_light(area_light_sample_t &out, context_t &c,
     intersection_t light_hit;
     intersect(c.bvh, c.scene, shadow_ray, light_hit);
 
-    bool visible = light_hit.has_hit && light_hit.distance > 0 && light_hit.faceIndex == face_index;
+    bool visible =
+        light_hit.has_hit && light_hit.distance > 0 && light_hit.faceIndex == face_index;
     if (!visible) {
         out.p_als = 0;
         return;
@@ -145,7 +150,8 @@ static __device__ Spectrum rgb_to_radiometric(Vec3 color, float intensity) {
         color_normalized = color / color_magnitude;
     }
     Spectrum spectrum = Spectrum::fromRGB(color_normalized);
-    float photometric_intensity = intensity * color_magnitude; // for simplicity multiply with color norm
+    float photometric_intensity =
+        intensity * color_magnitude; // for simplicity multiply with color norm
 
     // stems from relationship between
     float alpha = photometric_intensity / (683.0 * spectrum.luminance());
@@ -154,8 +160,8 @@ static __device__ Spectrum rgb_to_radiometric(Vec3 color, float intensity) {
     return radiometric_spectrum;
 }
 
-static __device__ void sample_light_source(light_source_sample_t &out, context_t &c, const Ray &ray,
-                                           const intersection_t &hit) {
+static __device__ void sample_light_source(light_source_sample_t &out, context_t &c,
+                                           const Ray &ray, const intersection_t &hit) {
     if (c.lst.nodes.count == 0) {
         out.p_lss = 0;
         return;
@@ -181,7 +187,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
             out.dir_hit_to_light = dir_hit_to_light / distance;
 
             Ray shadow_ray;
-            initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light, hit.true_normal);
+            initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light,
+                                hit.true_normal);
 
             intersection_t light_hit;
             intersect(c.bvh, c.scene, shadow_ray, light_hit);
@@ -206,7 +213,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
             out.dir_hit_to_light.normalize();
 
             Ray shadow_ray;
-            initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light, hit.incident_normal);
+            initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light,
+                                hit.incident_normal);
             intersection_t shadow_hit;
             intersect(c.bvh, c.scene, shadow_ray, shadow_hit);
             if (shadow_hit.has_hit) {
@@ -241,7 +249,8 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
     }
 }
 
-static __device__ float evaluate_direct_p(context_t &c, const Ray &ray, const intersection_t &hit) {
+static __device__ float evaluate_direct_p(context_t &c, const Ray &ray,
+                                          const intersection_t &hit) {
 
     uint32_t num_nodes = c.lst.nodes.count;
     if (num_nodes == 0) {
@@ -285,7 +294,12 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
         intersection_t hit;
         intersect(c.bvh, c.scene, ray, hit);
         if (!hit.has_hit) {
-            light += throughput * Spectrum::fromRGB(c.cfg.world_clear_color);
+            Vec3 equi_uv = projectEquirectangular(ray.r);
+            float4 clear_lookup =
+                tex2D<float4>(c.scene.textures[c.scene.clearTexture], equi_uv.x, equi_uv.y);
+            Vec3 clear_color = Vec3(clear_lookup.x, clear_lookup.y, clear_lookup.z);
+            clear_color *= c.cfg.world_clear_color;
+            light += throughput * Spectrum::fromRGB(clear_color);
             break;
         }
 
@@ -308,7 +322,8 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
             evaluate_bsdf(lss_bsdf, ray.r, lss.dir_hit_to_light, hit, c.rstate);
 
             float cos_theta_x = std::abs(hit.true_normal.dot(lss.dir_hit_to_light));
-            Spectrum direct_outgoing_radiance = lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
+            Spectrum direct_outgoing_radiance =
+                lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
 
             // balance heuristic on part of direct light
             float weight = lss.p_lss / (lss.p_lss + lss_bsdf.prob_i);
@@ -332,14 +347,15 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
 
         float cos_theta = std::abs(hit.true_normal.dot(indirect_bsdf.omega_i));
         // find next throughput
-        throughput *= indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
+        throughput *=
+            indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
     }
 
     return light;
 }
 
-__global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const LST lst, config_t cfg, int previous_samples,
-                              int current_samples) {
+__global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const LST lst,
+                              config_t cfg, int previous_samples, int current_samples) {
     int pixel_x = threadIdx.x + blockDim.x * blockIdx.x;
     int pixel_y = threadIdx.y + blockDim.y * blockIdx.y;
 
@@ -370,7 +386,7 @@ __global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const
         total_light += current_light;
     }
 
-    total_light *= 2; // test exposure
+    total_light *= cfg.output_exposure;
 
     total_light /= (float)current_samples;
     Vec3 pixel_color = total_light.toRGB();
@@ -378,8 +394,8 @@ __global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const
     int total_samples = previous_samples + current_samples;
     Vec3 last_pixel = img[pixel_y * cfg.resolution_x + pixel_x];
 
-    Vec3 next_pixel =
-        last_pixel * (previous_samples / (float)total_samples) + pixel_color * (current_samples / (float)total_samples);
+    Vec3 next_pixel = last_pixel * (previous_samples / (float)total_samples) +
+                      pixel_color * (current_samples / (float)total_samples);
 
     img[pixel_y * cfg.resolution_x + pixel_x] = next_pixel;
 }

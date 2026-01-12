@@ -19,6 +19,15 @@ static int tok_int(void *field, char *input) {
     return 0;
 }
 
+static int tok_float(void *field, char *input) {
+    // printf("tok_float:  %s\n", input);
+    if (1 != sscanf(input, "%f", (float *)field)) {
+        fprintf(stderr, "unable to parse float arg input=%s\n", input);
+        return 1;
+    }
+    return 0;
+}
+
 static int tok_path(void *field, char *input) {
     // printf("tok_path: %s\n", input);
     strncpy(*(path_t *)field, input, sizeof(path_t));
@@ -27,6 +36,7 @@ static int tok_path(void *field, char *input) {
 
 static void parse(int argc, char *argv[], void *field, const char *name,
                   int tokenizer(void *, char *)) {
+
     for (int i = 1; i < argc - 1; i++) {
         // printf("TEST %s    %s\n", argv[i], name);
         if (!strcmp(argv[i], name)) {
@@ -39,9 +49,9 @@ static void parse(int argc, char *argv[], void *field, const char *name,
 }
 
 int load_config(config_t *cfg, int argc, char *argv[]) {
-    // fprintf(stderr, "unable to open logfile\n");
 
     parse(argc, argv, &cfg->world_clear_color, "--world-clear-color", tok_vec3);
+    parse(argc, argv, &cfg->world_clear_color_texture, "--world-clear-color-texture", tok_path);
 
     parse(argc, argv, &cfg->seed, "--sampling-seed", tok_int);
     parse(argc, argv, &cfg->samples, "--sampling-samples", tok_int);
@@ -49,6 +59,7 @@ int load_config(config_t *cfg, int argc, char *argv[]) {
 
     parse(argc, argv, &cfg->resolution_x, "--output-resolution-x", tok_int);
     parse(argc, argv, &cfg->resolution_y, "--output-resolution-y", tok_int);
+    parse(argc, argv, &cfg->output_exposure, "--output-exposure", tok_float);
 
     parse(argc, argv, &cfg->log_level, "--logger-log-level", tok_int);
     parse(argc, argv, &cfg->log_stdout, "--logger-log-stdout", tok_int);
@@ -58,13 +69,3 @@ int load_config(config_t *cfg, int argc, char *argv[]) {
 
     return 0;
 }
-
-// int resolution_x, resolution_y;
-// int samples, seed, samples_every_update;
-
-// Vec3 world_clear_color;
-
-// char* scene_gltf;
-
-// int log_level, log_stdout;
-// char* log_file;

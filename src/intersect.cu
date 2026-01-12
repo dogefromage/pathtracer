@@ -78,6 +78,18 @@ static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &ver
     return 1;
 }
 
+__device__ float linearize_from_srgb_scalar(float c) {
+    // Standard sRGB -> linear conversion
+    if (c <= 0.04045f)
+        return c / 12.92f;
+    else
+        return powf((c + 0.055f) / 1.055f, 2.4f);
+}
+
+__device__ static Vec3 linearize_from_srgb(const Vec3 srgb) {
+    return Vec3(linearize_from_srgb_scalar(srgb.x), linearize_from_srgb_scalar(srgb.y), linearize_from_srgb_scalar(srgb.z));
+}
+
 __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_t &hit, int faceIndex) {
     const face_t &face = scene.faces[faceIndex];
 
@@ -110,7 +122,8 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             float alpha = 1;
             if (hit.mat->textureColor >= 0) {
                 float4 texLookup = tex2D<float4>(scene.textures[hit.mat->textureColor], hit.texcoord0.x, hit.texcoord0.y);
-                color = Vec3(texLookup.x, texLookup.y, texLookup.z);
+                Vec3 color_srgb = Vec3(texLookup.x, texLookup.y, texLookup.z);
+                color = linearize_from_srgb(color_srgb);
                 alpha = texLookup.w;
             }
             color *= hit.mat->baseColorFactor.xyz();

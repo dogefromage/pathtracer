@@ -12,6 +12,6 @@ AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortBlocksOnASingleLine: false
 
-ColumnLimit: 128
+ColumnLimit: 96
 # SortIncludes: false
 SpaceBeforeParens: ControlStatements

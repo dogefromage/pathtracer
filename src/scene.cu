@@ -5,6 +5,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <iostream>
 
+#include "config.h"
 #include "logger.h"
 #include "tiny_gltf.h"
 #include "utils.h"
@@ -47,7 +48,8 @@ static Mat4 get_transform(const tg::Node &node) {
         float m23 = node.matrix[14];
         float m33 = node.matrix[15];
 
-        return Mat4(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
+        return Mat4(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32,
+                    m33);
     }
 
     Mat4 forward = Mat4::Identity();
@@ -98,7 +100,8 @@ static Mat4 get_transform(const tg::Node &node) {
     return forward;
 }
 
-static void parse_camera(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
+static void parse_camera(temp_scene_t &scene, const tg::Model &model, const tg::Node &node,
+                         const Mat4 &modelTransform) {
     const tg::Camera &scene_cam = model.cameras[node.camera];
 
     if (scene_cam.type != "perspective") {
@@ -121,7 +124,8 @@ static void parse_camera(temp_scene_t &scene, const tg::Model &model, const tg::
     scene.cameras.push_back(cam);
 }
 
-static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
+static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::Node &node,
+                        const Mat4 &modelTransform) {
     const tg::Light &modelLight = model.lights[node.light];
 
     light_t light;
@@ -164,11 +168,13 @@ static void parse_light(temp_scene_t &scene, const tg::Model &model, const tg::N
 static void print_material(const material_t *material) {
     log_trace("Material:\n");
     log_trace("  Name: %s\n", material->name);
-    log_trace("  BaseColorFactor: (%.2f, %.2f, %.2f; %.2f)\n", material->baseColorFactor.x, material->baseColorFactor.y,
-              material->baseColorFactor.z, material->baseColorFactor.w);
+    log_trace("  BaseColorFactor: (%.2f, %.2f, %.2f; %.2f)\n", material->baseColorFactor.x,
+              material->baseColorFactor.y, material->baseColorFactor.z,
+              material->baseColorFactor.w);
     log_trace("  Color texture: (%d)\n", material->textureColor);
     log_trace("  Transmission: %.2f\n", material->transmission);
-    log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y, material->emissive.z);
+    log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
+              material->emissive.z);
     log_trace("  Metallic: %.2f\n", material->metallic);
     log_trace("  Roughness: %.2f\n", material->roughness);
     log_trace("  IoR: %.2f\n", material->ior);
@@ -188,9 +194,11 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
 
     for (const auto &extension : sceneMat.extensions) {
         if (extension.first == "KHR_materials_emissive_strength") {
-            emissiveStrength = (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
+            emissiveStrength =
+                (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_transmission") {
-            transmissionFactor = (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
+            transmissionFactor =
+                (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_ior") {
             ior = (float)extension.second.Get("ior").GetNumberAsDouble();
         } else {
@@ -231,7 +239,8 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
     scene.materials.push_back(mat);
 }
 
-static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &model, int accIndex, int arity) {
+static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &model,
+                                    int accIndex, int arity) {
     const tg::Accessor &acc = model.accessors[accIndex];
     const tg::BufferView &bufView = model.bufferViews[acc.bufferView];
     const tg::Buffer &buf = model.buffers[bufView.buffer];
@@ -244,13 +253,17 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
 
     if (acc.maxValues.size() && acc.maxValues.size()) {
         hasGivenBounds = true;
-        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1], (float)acc.minValues[2]};
-        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1], (float)acc.maxValues[2]};
+        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1],
+                           (float)acc.minValues[2]};
+        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1],
+                           (float)acc.maxValues[2]};
         if (arity == 2) {
             givenBounds.min.z = -1e10f;
             givenBounds.max.z = 1e10f;
         }
-        // log_trace("Bounds given: (%.2f, %.2f, %.2f), (%.2f, %.2f, %.2f)}")
+        log_trace("Bounds given: (%.2f, %.2f, %.2f), (%.2f, %.2f, %.2f)\n", givenBounds.min.x,
+                  givenBounds.min.y, givenBounds.min.z, givenBounds.max.x, givenBounds.max.y,
+                  givenBounds.max.z);
     }
 
     assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
@@ -288,7 +301,8 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
     // log_trace("%lu vec3 parsed in given min and max:\n", acc.count);
 }
 
-static void scene_parse_acc_indices(std::vector<uint32_t> &list, const tg::Model &model, int accIndex) {
+static void scene_parse_acc_indices(std::vector<uint32_t> &list, const tg::Model &model,
+                                    int accIndex) {
     const tg::Accessor &acc = model.accessors[accIndex];
     const tg::BufferView &bufView = model.bufferViews[acc.bufferView];
     const tg::Buffer &buf = model.buffers[bufView.buffer];
@@ -337,7 +351,8 @@ static void scene_parse_acc_indices(std::vector<uint32_t> &list, const tg::Model
     log_trace("Indices scanned in range [%d, %d]\n", min, max);
 }
 
-static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, const Mat4 &modelTransform) {
+static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::Node &node,
+                       const Mat4 &modelTransform) {
     log_trace("Parsing mesh of node: %s\n", node.name.c_str());
 
     const tg::Mesh &mesh = model.meshes[node.mesh];
@@ -441,7 +456,8 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
     log_trace("Done with mesh\n");
 }
 
-static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const tg::Node &node, Mat4 parentTransform) {
+static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const tg::Node &node,
+                             Mat4 parentTransform) {
     Mat4 nodeForwardTransform = get_transform(node);
     Mat4 modelTransform = parentTransform * nodeForwardTransform;
 
@@ -461,7 +477,8 @@ static void scene_parse_node(temp_scene_t &scene, const tg::Model &model, const 
     }
 }
 
-static cudaTextureDesc createCudaTextureDescFromGLTF(int minFilter, int magFilter, int wrapS, int wrapT, bool mipmaps) {
+static cudaTextureDesc createCudaTextureDescFromGLTF(int minFilter, int magFilter, int wrapS,
+                                                     int wrapT, bool mipmaps) {
     cudaTextureDesc desc = {};
 
     auto gltfWrapToCuda = [](int wrap) {
@@ -510,15 +527,153 @@ static cudaTextureDesc createCudaTextureDescFromGLTF(int minFilter, int magFilte
         desc.minMipmapLevelClamp = 0.0f;
     }
 
-    desc.normalizedCoords = 1;                   // use [0,1] texture coordinates
-    desc.readMode = cudaReadModeNormalizedFloat; // uchar -> float
-    desc.sRGB = 1;
+    desc.normalizedCoords = 1; // use [0,1] texture coordinates
     desc.maxAnisotropy = 1;
 
     return desc;
 }
 
-void Scene::read_gltf(const char *filename) {
+static cudaChannelFormatDesc getChannelDescription(bool isFloat, int channels) {
+    if (isFloat) {
+        switch (channels) {
+        case 1:
+            return cudaCreateChannelDesc<float>();
+        case 2:
+            return cudaCreateChannelDesc<float2>();
+        case 4:
+            return cudaCreateChannelDesc<float4>();
+        default:
+            log_error("Unsupported channels %d\n", channels);
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        switch (channels) {
+        case 1:
+            return cudaCreateChannelDesc<uchar1>();
+        case 2:
+            return cudaCreateChannelDesc<uchar2>();
+        case 4:
+            return cudaCreateChannelDesc<uchar4>();
+        default:
+            log_error("Unsupported channels %d\n", channels);
+            exit(EXIT_FAILURE);
+        }
+    }
+    return {}; // should never be reached
+}
+
+static image_resource_t load_image(fs::path &path_img) {
+    log_trace("Loading image: %s\n", path_img.c_str());
+
+    bool isFloat;
+
+    if (path_img.extension() == ".png" || path_img.extension() == ".jpg") {
+        isFloat = false;
+    } else if (path_img.extension() == ".hdr") {
+        isFloat = true;
+    } else {
+        log_error("Unknown image extension: %s\n", path_img.extension().c_str());
+        exit(EXIT_FAILURE);
+    }
+
+    // get initial info of image
+    int width, height, actual_components;
+    if (!stbi_info(path_img.c_str(), &width, &height, &actual_components)) {
+        log_error("STBI error: %s\n", stbi_failure_reason());
+        exit(EXIT_FAILURE);
+    }
+
+    int loaded_components = 0;
+
+    switch (actual_components) {
+    case 3:
+    case 4:
+        loaded_components = 4;
+        break;
+    default:
+        log_error("image with %d components unsupported\n", actual_components);
+        exit(EXIT_FAILURE);
+    }
+
+    cudaChannelFormatDesc channelDesc = getChannelDescription(isFloat, loaded_components);
+
+    void *imageData;
+
+    if (isFloat) {
+        imageData = (void *)stbi_loadf(path_img.c_str(), &width, &height, &actual_components,
+                                       loaded_components);
+    } else {
+        imageData = (void *)stbi_load(path_img.c_str(), &width, &height, &actual_components,
+                                      loaded_components);
+    }
+    if (!imageData) {
+        log_error("STBI error: %s\n", stbi_failure_reason());
+        exit(EXIT_FAILURE);
+    }
+    assert(loaded_components != 3);
+
+    // setup array
+    cudaArray_t cuArray;
+    cudaError_t cuerr;
+    cuerr = cudaMallocArray(&cuArray, &channelDesc, width, height);
+    if (check_cuda_err(cuerr) != cudaSuccess) {
+        log_error("cudaMallocArray\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // copy mem to array
+    size_t copy_size = sizeof(unsigned char) * height * width * loaded_components;
+    cuerr = cudaMemcpyToArray(cuArray, 0, 0, imageData, copy_size, cudaMemcpyHostToDevice);
+    if (check_cuda_err(cuerr) != cudaSuccess) {
+        log_error("cudaMemcpyToArray\n");
+        exit(EXIT_FAILURE);
+    }
+
+    stbi_image_free(imageData);
+
+    cudaResourceDesc resDesc{};
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = cuArray;
+
+    log_trace("Loaded image (w=%d, h=%d, actual_components=%d, loaded_components=%d)\n", width,
+              height, actual_components, loaded_components);
+
+    image_resource_t resource;
+    resource.resourceDesc = resDesc;
+    resource.channels = loaded_components;
+    resource.isFloat = isFloat;
+
+    return resource;
+}
+
+int load_texture(std::vector<cudaTextureObject_t> &textures, const image_resource_t &resource,
+                 int minFilter, int magFilter, int wrapS, int wrapT) {
+    cudaTextureDesc texDesc =
+        createCudaTextureDescFromGLTF(minFilter, magFilter, wrapS, wrapT, false);
+
+    if (resource.isFloat) {
+        texDesc.readMode = cudaReadModeElementType;
+    } else {
+        texDesc.readMode = cudaReadModeNormalizedFloat;
+    }
+    // sRGB conversion is done inside the renderer (TODO ideally we use this but then we
+    // need to know which texture is used for color beforehand -> dirty check what this
+    // texture will be used for and then decide, or duplicate)
+    texDesc.sRGB = 0;
+
+    cudaTextureObject_t texObj = 0;
+    cudaError_t cuerr;
+    cuerr = cudaCreateTextureObject(&texObj, &resource.resourceDesc, &texDesc, nullptr);
+    if (check_cuda_err(cuerr) != cudaSuccess) {
+        log_error("cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);\n");
+        exit(EXIT_FAILURE);
+    }
+
+    textures.push_back(texObj);
+    return textures.size() - 1; // index of new texture
+}
+
+void Scene::read_gltf(const char *filename, config_t &config) {
     log_info("Parsing .gltf... \n");
 
     tg::Model model;
@@ -566,6 +721,8 @@ void Scene::read_gltf(const char *filename) {
 
     temp_scene_t temp_scene;
     cudaError_t cuerr;
+    std::vector<image_resource_t> image_resources;
+    std::vector<cudaTextureObject_t> textures;
 
     // IMAGES
     for (const auto &img : model.images) {
@@ -574,105 +731,19 @@ void Scene::read_gltf(const char *filename) {
         fs::path path_gltf = filename;
         fs::path path_img = path_gltf.parent_path() / img_name;
 
-        log_trace("img.uri %s\n", img.uri.c_str());
-        log_trace("path_img %s\n", path_img.c_str());
-
-        // get initial info of image
-        int width, height, actual_components;
-        if (!stbi_info(path_img.c_str(), &width, &height, &actual_components)) {
-            assert(false);
-        }
-
-        int loaded_components = -1;
-        cudaChannelFormatDesc channelDesc;
-
-        switch (actual_components) {
-        // case 1:
-        //     desired_components = components;
-        //     channelDesc = cudaCreateChannelDesc<uchar>();
-        //     break;
-        // case 2:
-        //     desired_components = components;
-        //     channelDesc = cudaCreateChannelDesc<uchar2>();
-        //     break;
-        case 3:
-        case 4:
-            loaded_components = 4;
-            channelDesc = cudaCreateChannelDesc<uchar4>();
-            break;
-        default:
-            log_error("Cannot interpret image with %d components\n", actual_components);
-            exit(EXIT_FAILURE);
-            break;
-        }
-
-        log_trace("Image (w=%d, h=%d, actual_components=%d, loaded_components=%d)\n", width, height, actual_components,
-                  loaded_components);
-
-        // finally load image with desired components
-        unsigned char *data = stbi_load(path_img.c_str(), &width, &height, &actual_components, loaded_components);
-        if (!data) {
-            log_error("Failed to load image: %s\n", path_img.c_str());
-            exit(EXIT_FAILURE);
-        }
-        assert(loaded_components != 3);
-
-        // setup array
-        cudaArray_t cuArray;
-        cuerr = cudaMallocArray(&cuArray, &channelDesc, width, height);
-        if (check_cuda_err(cuerr) != cudaSuccess) {
-            log_error("cudaMallocArray(&cuArray, &channelDesc, width, height);\n");
-            exit(EXIT_FAILURE);
-        }
-
-        // copy mem to array
-        size_t copy_size = sizeof(unsigned char) * height * width * loaded_components;
-        cuerr = cudaMemcpyToArray(cuArray, 0, 0, data, copy_size, cudaMemcpyHostToDevice);
-        if (check_cuda_err(cuerr) != cudaSuccess) {
-            log_error("cudaMemcpyToArray(cuArray, 0, 0, data, copy_size, cudaMemcpyHostToDevice);\n");
-            exit(EXIT_FAILURE);
-        }
-
-        stbi_image_free(data);
-
-        cudaResourceDesc resDesc{};
-        resDesc.resType = cudaResourceTypeArray;
-        resDesc.res.array.array = cuArray;
-
-        temp_scene.image_resources.push_back({resDesc, loaded_components});
+        image_resource_t image_resource = load_image(path_img);
+        image_resources.push_back(image_resource);
     }
 
     // TEXTURES
     for (const auto &tex : model.textures) {
-        log_trace("tex.source %d\n", tex.source);
-        log_trace("tex.sampler %d\n", tex.sampler);
+        log_trace("Creating texture: source=%d, sampler=%d\n", tex.source, tex.sampler);
 
-        image_resource_t &resource = temp_scene.image_resources[tex.source];
+        image_resource_t &resource = image_resources[tex.source];
         const auto &sampler = model.samplers[tex.sampler];
 
-        bool mipmaps = false; // TODO maybe
-        cudaTextureDesc texDesc =
-            createCudaTextureDescFromGLTF(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT, mipmaps);
-
-        switch (resource.channels) {
-        // case 1:
-        // case 2:
-        //     texDesc.readMode = cudaReadModeElementType;
-        //     break;
-        case 3:
-        case 4:
-            texDesc.readMode = cudaReadModeNormalizedFloat;
-            break;
-        }
-
-        cudaTextureObject_t texObj = 0;
-        cuerr = cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);
-        if (check_cuda_err(cuerr) != cudaSuccess) {
-            log_error("cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);\n");
-            exit(EXIT_FAILURE);
-        }
-
-        temp_scene.textures.push_back(texObj);
+        load_texture(textures, resource, sampler.minFilter, sampler.magFilter, sampler.wrapS,
+                     sampler.wrapT);
     }
 
     // MATERIALS
@@ -689,8 +760,18 @@ void Scene::read_gltf(const char *filename) {
         scene_parse_node(temp_scene, model, node, Mat4::Identity());
     }
 
-    // FINALIZE CLASS
+    // additional stuff from config
+    // clear color and texture
+    this->clearColor = config.world_clear_color;
+    fs::path path_clear_color_texture = config.world_clear_color_texture;
+    image_resource_t clear_color_image_resource = load_image(path_clear_color_texture);
 
+    this->clearTexture =
+        load_texture(textures, clear_color_image_resource, TINYGLTF_TEXTURE_FILTER_LINEAR,
+                     TINYGLTF_TEXTURE_FILTER_LINEAR, TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT,
+                     TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT);
+
+    // FINALIZE CLASS
     this->_location = CudaLocation::Host;
 
     if (temp_scene.cameras.size() == 0) {
@@ -701,7 +782,7 @@ void Scene::read_gltf(const char *filename) {
         // dummy_camera.updir = {0, 0, 1};
         // dummy_camera.yfov = 0.7;
 
-        dummy_camera.position = {0, 0, 15};
+        dummy_camera.position = {0, 0, 3};
         dummy_camera.target = {0, 0, 0};
         dummy_camera.updir = {0, 1, 0};
         dummy_camera.yfov = 0.8;
@@ -722,7 +803,7 @@ void Scene::read_gltf(const char *filename) {
     fixed_array_from_vector(this->faces, temp_scene.faces);
     fixed_array_from_vector(this->materials, temp_scene.materials);
     fixed_array_from_vector(this->lights, temp_scene.lights);
-    fixed_array_from_vector(this->textures, temp_scene.textures);
+    fixed_array_from_vector(this->textures, textures);
 
     log_info("Done parsing .gltf\n");
 }

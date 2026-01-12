@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
     }
 
     Scene h_scene, d_scene;
-    h_scene.read_gltf(cfg.path_gltf);
+    h_scene.read_gltf(cfg.path_gltf, cfg);
 
     // bounding volume hierarchy
     BVH h_bvh, d_bvh;
@@ -76,7 +76,8 @@ int main(int argc, char *argv[]) {
     log_info("Rendering %d samples in batches of %d, img size "
              "(%d, %d)\n",
              cfg.samples, cfg.samples_every_update, cfg.resolution_x, cfg.resolution_y);
-    log_info("Kernel params <<<(%u,%u), (%u,%u)>>>\n", num_blocks.x, num_blocks.y, threads_per_block.x, threads_per_block.y);
+    log_info("Kernel params <<<(%u,%u), (%u,%u)>>>\n", num_blocks.x, num_blocks.y,
+             threads_per_block.x, threads_per_block.y);
 
     auto startTime = std::chrono::system_clock::now();
 
@@ -97,18 +98,21 @@ int main(int argc, char *argv[]) {
         renderedSamples += currentSamples;
 
         auto endTime = std::chrono::system_clock::now();
-        int elapsedMillis = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        int elapsedMillis =
+            std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         float elapsedTime = elapsedMillis / 1000.0f;
 
         cfg.seed++;
 
-        float megaSamplesPerSecond = (float)cfg.resolution_x * cfg.resolution_y * renderedSamples / (1'000'000.0 * elapsedTime);
+        float megaSamplesPerSecond = (float)cfg.resolution_x * cfg.resolution_y *
+                                     renderedSamples / (1'000'000.0 * elapsedTime);
 
         float samplesPerPixelSecond = renderedSamples / elapsedTime;
 
         log_info("Rendered %d out of %d S/px in %.1fs - %.2f "
                  "S/px/s - %.2f MS/s\n",
-                 renderedSamples, cfg.samples, elapsedTime, samplesPerPixelSecond, megaSamplesPerSecond);
+                 renderedSamples, cfg.samples, elapsedTime, samplesPerPixelSecond,
+                 megaSamplesPerSecond);
         log_trace("Updated image: %s\n", cfg.path_render);
     }
 

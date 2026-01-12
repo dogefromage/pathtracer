@@ -31,6 +31,7 @@ pathtracer:
     # resolution-y: 2000
     resolution-x: 1024
     resolution-y: 1024
+    exposure: 2
 
   sampling:
     seed: 42
@@ -40,5 +41,6 @@ pathtracer:
 
   world:
     # clear-color: 0 0 0
-    clear-color: 1 1 1
+    clear-color: 3 3 3
     # clear-color: 0.509 0.607 0.768
+    clear-color-texture: assets/sunny_rose_garden_1k.hdr
