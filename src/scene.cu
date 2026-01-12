@@ -16,6 +16,8 @@
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #include "tiny_gltf/tiny_gltf.h"
 
+// #include "MikkTSpace/mikktspace.h"
+
 namespace tg = tinygltf;
 namespace fs = std::filesystem;
 
