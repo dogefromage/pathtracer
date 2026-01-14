@@ -13,8 +13,8 @@ inputs:
   # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
   # - ../glTF-Sample-Models/2.0/TextureSettingsTest/glTF/TextureSettingsTest.gltf
   # - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
-  # - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
-  - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
+  - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
+  # - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
   # - assets/textured_plane.gltf
 
 pathtracer:
@@ -49,6 +49,12 @@ pathtracer:
     # clear-color-texture: assets/uv_test.png
 
   default-camera:
+    # SPONZA
+    # position: 7 1 0
+    # target: 0 2 0
+    # updir: 0 1 0
+    # yfov: 1
+    # IF SOMETHIGN IS IN CENTER
     position: 0 0 5
     target: 0 0 0
     updir: 0 1 0

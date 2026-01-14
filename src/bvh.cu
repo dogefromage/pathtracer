@@ -139,6 +139,7 @@ static void subdivide(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stat
 
     bvh_node_t &node = bvh.nodes[nodeIndex];
     int count = node.end - node.start;
+    // printf("[ %i, %i, d=%d, c=%d )\n", node.start, node.end, depth, count);
     if (count <= 2) {
         return; // stop criterion
     }
@@ -158,8 +159,12 @@ static void subdivide(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stat
         }
     }
 
-    int leftCount = i - node.start;
-    assert(0 < leftCount || leftCount < count);
+    bool is_successful_split = (int)node.start < i && i < (int)node.end;
+    if (!is_successful_split) {
+        // cheat because split did not work :(
+        stats.totalSkippedFaces++;
+        i = node.start + count / 2;
+    }
 
     uint32_t leftIndex = bvh.nodeCount++;
     uint32_t rightIndex = bvh.nodeCount++;

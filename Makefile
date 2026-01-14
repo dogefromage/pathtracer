@@ -6,7 +6,7 @@ CUDA_LINK_LIBS= -lcudart -lcurand
 NVCC = nvcc
 NVCC_FLAGS = -I./include $(CUDA_INCLUDE) -dc -cudart shared -arch=sm_89 \
 	--compiler-options "-Wall -Wno-format-truncation" \
-	-g -G
+# 	-g -G
 
 SRC_DIR = src
 BUILD_DIR = build

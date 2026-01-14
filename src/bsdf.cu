@@ -146,12 +146,12 @@ __device__ void sample_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const interse
     //     return;
     // }
 
-    // bool isMirror = false;
-    bool isMirror = hit.mat->metallic >= 0.9;
-    if (isMirror) {
-        sample_bsdf_mirror(out, v_inv, hit, rstate);
-        return;
-    }
+    // // bool isMirror = false;
+    // bool isMirror = hit.mat->metallic >= 0.9;
+    // if (isMirror) {
+    //     sample_bsdf_mirror(out, v_inv, hit, rstate);
+    //     return;
+    // }
 
     // diffuse
     out.omega_i = hemi_sample_uniform(hit.incident_normal, rstate);
@@ -173,13 +173,13 @@ __device__ void evaluate_bsdf(bsdf_sample_t &out, const Vec3 &v_inv, const Vec3 
     //     out.prob_i = 0;
     // }
 
-    bool isMirror = hit.mat->metallic >= 0.9;
-    if (isMirror) {
-        // probability is zero since mirror does not allow direct light
-        out.bsdf = Spectrum::Zero();
-        out.prob_i = 0;
-        return;
-    }
+    // bool isMirror = hit.mat->metallic >= 0.9;
+    // if (isMirror) {
+    //     // probability is zero since mirror does not allow direct light
+    //     out.bsdf = Spectrum::Zero();
+    //     out.prob_i = 0;
+    //     return;
+    // }
 
     // diffuse
     out.bsdf = Spectrum::fromRGB(hit.color) / M_PIf;

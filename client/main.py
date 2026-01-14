@@ -89,7 +89,7 @@ if __name__ == "__main__":
             str(subdir_output),
         ]
 
-        if cli.make_runfile:
+        if "make_runfile" in cli and cli.make_runfile:
             create_hacky_launch_json(all_args)
 
         else:
