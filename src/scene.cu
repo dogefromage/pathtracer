@@ -178,7 +178,8 @@ static void print_material(const material_t *material) {
     log_trace("  BaseColorFactor: (%.2f, %.2f, %.2f; %.2f)\n", material->baseColorFactor.x,
               material->baseColorFactor.y, material->baseColorFactor.z,
               material->baseColorFactor.w);
-    log_trace("  Color texture: (%d)\n", material->textureColor);
+    log_trace("  Color texture: (%d)\n", material->baseColorTexture);
+    log_trace("  Normal texture: (%d)\n", material->normalTexture);
     log_trace("  Transmission: %.2f\n", material->transmission);
     log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
               material->emissive.z);
@@ -233,7 +234,10 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
     mat.ior = ior;
     mat.transmission = (float)transmissionFactor;
 
-    mat.textureColor = sceneMat.pbrMetallicRoughness.baseColorTexture.index;
+    mat.baseColorTexture = sceneMat.pbrMetallicRoughness.baseColorTexture.index;
+
+    mat.normalTexture = sceneMat.normalTexture.index;
+
     if (sceneMat.pbrMetallicRoughness.baseColorTexture.texCoord != 0) {
         log_warning("TODO implement other texCoords");
     }
@@ -246,32 +250,34 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
     scene.materials.push_back(mat);
 }
 
-static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &model,
-                                    int accIndex, int arity) {
+template <typename T>
+static void scene_parse_acc_to_vec(std::vector<T> &out, const tg::Model &model, int accIndex,
+                                   int arity) {
     const tg::Accessor &acc = model.accessors[accIndex];
     const tg::BufferView &bufView = model.bufferViews[acc.bufferView];
     const tg::Buffer &buf = model.buffers[bufView.buffer];
 
-    assert(arity == 2 || arity == 3);
+    assert(arity == 2 || arity == 3 || arity == 4);
 
-    AABB actualBounds;
-    AABB givenBounds;
-    bool hasGivenBounds = false;
+    // AABB actualBounds;
+    // AABB givenBounds;
+    // bool hasGivenBounds = false;
 
-    if (acc.maxValues.size() && acc.maxValues.size()) {
-        hasGivenBounds = true;
-        givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1],
-                           (float)acc.minValues[2]};
-        givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1],
-                           (float)acc.maxValues[2]};
-        if (arity == 2) {
-            givenBounds.min.z = -1e10f;
-            givenBounds.max.z = 1e10f;
-        }
-        log_trace("Bounds given: (%.2f, %.2f, %.2f), (%.2f, %.2f, %.2f)\n", givenBounds.min.x,
-                  givenBounds.min.y, givenBounds.min.z, givenBounds.max.x, givenBounds.max.y,
-                  givenBounds.max.z);
-    }
+    // if (acc.maxValues.size() && acc.maxValues.size()) {
+    //     hasGivenBounds = true;
+    //     givenBounds.min = {(float)acc.minValues[0], (float)acc.minValues[1],
+    //                        (float)acc.minValues[2]};
+    //     givenBounds.max = {(float)acc.maxValues[0], (float)acc.maxValues[1],
+    //                        (float)acc.maxValues[2]};
+    //     if (arity == 2) {
+    //         givenBounds.min.z = -1e10f;
+    //         givenBounds.max.z = 1e10f;
+    //     }
+    //     log_trace("Bounds given: (%.2f, %.2f, %.2f), (%.2f, %.2f, %.2f)\n",
+    //     givenBounds.min.x,
+    //               givenBounds.min.y, givenBounds.min.z, givenBounds.max.x, givenBounds.max.y,
+    //               givenBounds.max.z);
+    // }
 
     assert(!acc.sparse.isSparse && "sparse mesh unsupported"); // TODO maybe
 
@@ -283,7 +289,7 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
         size_t byteNumber = acc.byteOffset + bufView.byteOffset + byteStride * i;
         const float *item = reinterpret_cast<const float *>(&buf.data[byteNumber]);
 
-        Vec3 v = Vec3::Zero();
+        T v = T::Zero();
         for (int j = 0; j < arity; j++) {
             v[j] = item[j];
         }
@@ -294,12 +300,12 @@ static void scene_parse_acc_to_vec3(std::vector<Vec3> &out, const tg::Model &mod
         //     printf("texcoord0: (%f, %f)\n", v.x, v.y);
         // }
 
-        actualBounds.grow(v);
+        // actualBounds.grow(v);
 
-        if (hasGivenBounds) {
-            // sanity check
-            assert(givenBounds.contains(v));
-        }
+        // if (hasGivenBounds) {
+        //     // sanity check
+        //     assert(givenBounds.contains(v));
+        // }
     }
 
     // char s_min[64], s_max[64];
@@ -373,6 +379,7 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
         }
 
         std::vector<Vec3> positions;
+        std::vector<Vec4> tangents;
         std::vector<Vec3> normals;
         std::vector<Vec3> texcoord0;
         std::vector<uint32_t> indices;
@@ -380,13 +387,16 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
         for (const auto &attr : prim.attributes) {
             if (attr.first == "POSITION") {
                 log_trace("Scanning POSITION\n");
-                scene_parse_acc_to_vec3(positions, model, attr.second, 3);
+                scene_parse_acc_to_vec(positions, model, attr.second, 3);
             } else if (attr.first == "NORMAL") {
                 log_trace("Scanning NORMAL\n");
-                scene_parse_acc_to_vec3(normals, model, attr.second, 3);
+                scene_parse_acc_to_vec(normals, model, attr.second, 3);
+            } else if (attr.first == "TANGENT") {
+                log_trace("Scanning TANGENT\n");
+                scene_parse_acc_to_vec(tangents, model, attr.second, 4);
             } else if (attr.first == "TEXCOORD_0") {
                 log_trace("Scanning TEXCOORD_0\n");
-                scene_parse_acc_to_vec3(texcoord0, model, attr.second, 2);
+                scene_parse_acc_to_vec(texcoord0, model, attr.second, 2);
             } else {
                 log_warning("skipped unsupported attribute '%s'\n", attr.first.c_str());
             }
@@ -401,6 +411,9 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
         bool hasNormals = normals.size() > 0;
         assert(!hasNormals || normals.size() == vertCount);
 
+        bool hasTangents = tangents.size() > 0;
+        assert(!hasTangents || tangents.size() == vertCount);
+
         bool hasTexcoord0 = texcoord0.size() > 0;
         assert(!hasTexcoord0 || texcoord0.size() == vertCount);
 
@@ -409,7 +422,8 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
 
         log_trace("Adding faces\n");
 
-        int vertOffset = scene.vertices.size();
+        int firstVertexIndex = scene.vertices.size();
+
         for (int i = 0; i < vertCount; i++) {
             vertex_t v;
 
@@ -418,8 +432,17 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
 
             if (hasNormals) {
                 v.normal = linearModelTransform * normals[i];
+                v.normal.normalize();
             } else {
                 v.normal.set(0);
+            }
+
+            if (hasTangents) {
+                Vec3 tw = linearModelTransform * tangents[i].xyz();
+                tw.normalize();
+                v.tangent = Vec4(tw.x, tw.y, tw.z, tangents[i].w); // include handedness
+            } else {
+                v.tangent.set(0);
             }
 
             if (hasTexcoord0) {
@@ -436,23 +459,23 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
             face.material = prim.material;
 
             face.vertexCount = 3;
-            face.vertices[0] = vertOffset + indices[i];
-            face.vertices[1] = vertOffset + indices[i + 1];
-            face.vertices[2] = vertOffset + indices[i + 2];
+            face.vertices[0] = firstVertexIndex + indices[i];
+            face.vertices[1] = firstVertexIndex + indices[i + 1];
+            face.vertices[2] = firstVertexIndex + indices[i + 2];
 
             if (hasNormals) {
                 face.shading = BARY_SHADING;
-                face.faceNormal.set(0);
+                face.normal.set(0);
+                face.tangent.set(0);
             } else {
                 face.shading = FLAT_SHADING;
-
-                // compute right handed flat normals
-                // world space -> does not need transform
+                // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+                // spec says no normals present -> flat shading
                 const Vec3 &A = scene.vertices[face.vertices[0]].position;
                 const Vec3 &B = scene.vertices[face.vertices[1]].position;
                 const Vec3 &C = scene.vertices[face.vertices[2]].position;
-
-                face.faceNormal = (B - A).cross(C - A).normalized();
+                face.normal = (B - A).cross(C - A).normalized();
+                face.tangent.set(0); // TODO !!!
             }
 
             scene.faces.push_back(face);
@@ -605,13 +628,16 @@ static image_resource_t load_image(fs::path &path_img) {
     cudaChannelFormatDesc channelDesc = getChannelDescription(isFloat, loaded_components);
 
     void *imageData;
+    size_t size_of_component;
 
     if (isFloat) {
         imageData = (void *)stbi_loadf(path_img.c_str(), &width, &height, &actual_components,
                                        loaded_components);
+        size_of_component = sizeof(float);
     } else {
         imageData = (void *)stbi_load(path_img.c_str(), &width, &height, &actual_components,
                                       loaded_components);
+        size_of_component = sizeof(stbi_uc);
     }
     if (!imageData) {
         log_error("STBI error: %s\n", stbi_failure_reason());
@@ -629,7 +655,7 @@ static image_resource_t load_image(fs::path &path_img) {
     }
 
     // copy mem to array
-    size_t copy_size = sizeof(unsigned char) * height * width * loaded_components;
+    size_t copy_size = size_of_component * loaded_components * height * width;
     cuerr = cudaMemcpyToArray(cuArray, 0, 0, imageData, copy_size, cudaMemcpyHostToDevice);
     if (check_cuda_err(cuerr) != cudaSuccess) {
         log_error("cudaMemcpyToArray\n");
@@ -653,7 +679,7 @@ static image_resource_t load_image(fs::path &path_img) {
     return resource;
 }
 
-int load_texture(std::vector<cudaTextureObject_t> &textures, const image_resource_t &resource,
+int load_texture(std::vector<texture_t> &textures, const image_resource_t &resource,
                  int minFilter, int magFilter, int wrapS, int wrapT) {
     cudaTextureDesc texDesc =
         createCudaTextureDescFromGLTF(minFilter, magFilter, wrapS, wrapT, false);
@@ -663,20 +689,32 @@ int load_texture(std::vector<cudaTextureObject_t> &textures, const image_resourc
     } else {
         texDesc.readMode = cudaReadModeNormalizedFloat;
     }
-    // sRGB conversion is done inside the renderer (TODO ideally we use this but then we
-    // need to know which texture is used for color beforehand -> dirty check what this
-    // texture will be used for and then decide, or duplicate)
-    texDesc.sRGB = 0;
 
-    cudaTextureObject_t texObj = 0;
+    texture_t tex;
+    tex.channels = resource.channels;
+    tex.isFloat = resource.isFloat;
+
     cudaError_t cuerr;
-    cuerr = cudaCreateTextureObject(&texObj, &resource.resourceDesc, &texDesc, nullptr);
+
+    // raw view of texture
+    texDesc.sRGB = 0;
+    cuerr =
+        cudaCreateTextureObject(&tex.texture_raw, &resource.resourceDesc, &texDesc, nullptr);
     if (check_cuda_err(cuerr) != cudaSuccess) {
         log_error("cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);\n");
         exit(EXIT_FAILURE);
     }
 
-    textures.push_back(texObj);
+    // now linearize same texture
+    texDesc.sRGB = 1;
+    cuerr = cudaCreateTextureObject(&tex.texture_linearized, &resource.resourceDesc, &texDesc,
+                                    nullptr);
+    if (check_cuda_err(cuerr) != cudaSuccess) {
+        log_error("cudaCreateTextureObject(&texObj, &resource.resource, &texDesc, nullptr);\n");
+        exit(EXIT_FAILURE);
+    }
+
+    textures.push_back(tex);
     return textures.size() - 1; // index of new texture
 }
 
@@ -728,7 +766,7 @@ void Scene::read_gltf(const char *filename, config_t &config) {
 
     temp_scene_t temp_scene;
     std::vector<image_resource_t> image_resources;
-    std::vector<cudaTextureObject_t> textures;
+    std::vector<texture_t> textures;
 
     // IMAGES
     for (const auto &img : model.images) {
@@ -782,27 +820,26 @@ void Scene::read_gltf(const char *filename, config_t &config) {
 
     if (temp_scene.cameras.size() == 0) {
         log_warning("No camera found in scene! Placing default camera.\n");
-        camera_t dummy_camera;
-        // dummy_camera.position = {1, 1, 1};
-        // dummy_camera.target = {0, 0, 0};
-        // dummy_camera.updir = {0, 0, 1};
-        // dummy_camera.yfov = 0.7;
+        camera_t default_camera;
+        default_camera.position = config.default_camera_position;
+        default_camera.target = config.default_camera_target;
+        default_camera.updir = config.default_camera_updir;
+        default_camera.yfov = config.default_camera_yfov;
 
-        dummy_camera.position = {0, 0, 5};
-        dummy_camera.target = {0, 0, 0};
-        dummy_camera.updir = {0, 1, 0};
-        dummy_camera.yfov = 0.8;
+        // log_trace("  position: (%.2f, %.2f, %.2f)\n", default_camera.position.x,
+        //           default_camera.position.y, default_camera.position.z);
+        // log_trace("  target: (%.2f, %.2f, %.2f)\n", default_camera.target.x,
+        //           default_camera.target.y, default_camera.target.z);
+        // log_trace("  updir: (%.2f, %.2f, %.2f)\n", default_camera.updir.x,
+        //           default_camera.updir.y, default_camera.updir.z);
+        // log_trace("  yfov: %.2f", default_camera.yfov);
 
-        temp_scene.cameras.push_back(dummy_camera);
+        temp_scene.cameras.push_back(default_camera);
     } else if (temp_scene.cameras.size() > 1) {
         log_warning("Multiple cameras found in scene, choosing camera 0.\n");
     }
 
     this->camera = temp_scene.cameras[0];
-
-    if (temp_scene.lights.size() == 0) {
-        log_info("No lights found in scene.\n");
-    }
 
     // copy into final scene
     fixed_array_from_vector(this->vertices, temp_scene.vertices);
@@ -852,5 +889,23 @@ void Scene::_free() {
         device_free(lights.items);
         device_free(materials.items);
         device_free(textures.items);
+    }
+}
+
+// __device__ float linearize_from_srgb_scalar(float c) {
+//     // Standard sRGB -> linear conversion
+//     if (c <= 0.04045f) {
+//         return c / 12.92f;
+//     } else {
+//         return powf((c + 0.055f) / 1.055f, 2.4f);
+//     }
+// }
+
+__device__ Vec4 sample_texture(const texture_t &tex, float u, float v, bool linearize_srgb) {
+    if (tex.isFloat && linearize_srgb) {
+        // the only case where it should be linearized
+        return tex2D<float4>(tex.texture_linearized, u, v);
+    } else {
+        return tex2D<float4>(tex.texture_raw, u, v);
     }
 }

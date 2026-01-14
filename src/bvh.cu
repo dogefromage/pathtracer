@@ -69,7 +69,8 @@ struct Bin {
 };
 
 // https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
-static float find_best_split_plane(const Scene &scene, BVH &bvh, bvh_node_t &node, int *bestAxis, float *bestSplit) {
+static float find_best_split_plane(const Scene &scene, BVH &bvh, bvh_node_t &node,
+                                   int *bestAxis, float *bestSplit) {
     AABB centroidBounds;
     for (size_t i = node.start; i < node.end; i++) {
         const Vec3 &c = bvh.centroids[bvh.indices[i]];
@@ -132,7 +133,8 @@ static float find_best_split_plane(const Scene &scene, BVH &bvh, bvh_node_t &nod
     return bestCost;
 }
 
-static void subdivide(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stats_t &stats, int depth) {
+static void subdivide(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stats_t &stats,
+                      int depth) {
     stats.maxDepth = std::max(stats.maxDepth, depth);
 
     bvh_node_t &node = bvh.nodes[nodeIndex];
@@ -184,7 +186,8 @@ static void subdivide(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stat
     subdivide(scene, bvh, rightIndex, stats, depth + 1);
 }
 
-static void calculate_stats(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_stats_t &stats) {
+static void calculate_stats(const Scene &scene, BVH &bvh, uint32_t nodeIndex,
+                            bvh_stats_t &stats) {
     stats.numberLeaves = 0;
     stats.averageLeafSize = 0;
     for (uint32_t i = 0; i < bvh.nodeCount; i++) {
@@ -211,7 +214,8 @@ static void print_stats(const Scene &scene, BVH &bvh, uint32_t nodeIndex, bvh_st
 
 #define RAY_NO_HIT 1e30f
 
-static __device__ float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec3 &r_inv, float min_t) {
+static __device__ float intersect_aabb(const AABB &aabb, const Ray &ray, const Vec3 &r_inv,
+                                       float min_t) {
     Vec3 t1 = (aabb.min - ray.o) * r_inv;
     Vec3 t2 = (aabb.max - ray.o) * r_inv;
     Vec3 tminv = Vec3::min(t1, t2);
@@ -227,7 +231,8 @@ static __device__ float intersect_aabb(const AABB &aabb, const Ray &ray, const V
     }
 }
 
-__device__ void bvh_intersect_iterative(const BVH &bvh, const Scene &scene, const Ray &ray, intersection_t &hit) {
+__device__ void bvh_intersect_iterative(const BVH &bvh, const Scene &scene, const Ray &ray,
+                                        intersection_t &hit) {
     Vec3 r_inv = 1.0 / ray.r;
 
     bvh_node_t *stack[BVH_TRAVERSAL_STACK_SIZE];
@@ -326,8 +331,8 @@ void BVH::build(const Scene &scene) {
     centroids.items = NULL;
 
     if (stats.maxDepth + 1 > BVH_TRAVERSAL_STACK_SIZE) {
-        log_error("bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n", stats.maxDepth,
-                  BVH_TRAVERSAL_STACK_SIZE);
+        log_error("bvh max height (%d) is too large, increase BVH_TRAVERSAL_STACK_SIZE (%d)\n",
+                  stats.maxDepth, BVH_TRAVERSAL_STACK_SIZE);
         exit(EXIT_FAILURE);
     }
 

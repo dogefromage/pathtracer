@@ -28,8 +28,10 @@
 // #define STBI_NO_HDR
 #define STBI_NO_PIC
 #define STBI_NO_PNM
+#pragma nv_diag_suppress 550
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
+#pragma nv_diag_default 550
 
 int main(int argc, char *argv[]) {
 

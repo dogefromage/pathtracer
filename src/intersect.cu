@@ -2,14 +2,16 @@
 
 #include "intersect.h"
 
-static __device__ Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t, float u, float v) {
+static __device__ Vec3 barycentric_lincom(const Vec3 &A, const Vec3 &B, const Vec3 &C, float t,
+                                          float u, float v) {
     return t * A + u * B + v * C;
 }
 
 #define TRIANGLE_DETERMINANT_EPS 1e-12
 #define TRIANGLE_MARGIN_EPS 1e-12
-static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0, const Vec3 &vert1, const Vec3 &vert2,
-                                                 float *t, float *u, float *v) {
+static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &vert0,
+                                                 const Vec3 &vert1, const Vec3 &vert2, float *t,
+                                                 float *u, float *v) {
     Vec3 edge1, edge2, tvec, pvec, qvec;
     float det, inv_det;
 
@@ -78,19 +80,8 @@ static __device__ int moeller_trumbore_intersect(const Ray &ray, const Vec3 &ver
     return 1;
 }
 
-__device__ float linearize_from_srgb_scalar(float c) {
-    // Standard sRGB -> linear conversion
-    if (c <= 0.04045f)
-        return c / 12.92f;
-    else
-        return powf((c + 0.055f) / 1.055f, 2.4f);
-}
-
-__device__ static Vec3 linearize_from_srgb(const Vec3 srgb) {
-    return Vec3(linearize_from_srgb_scalar(srgb.x), linearize_from_srgb_scalar(srgb.y), linearize_from_srgb_scalar(srgb.z));
-}
-
-__device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_t &hit, int faceIndex) {
+__device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_t &hit,
+                               int faceIndex) {
     const face_t &face = scene.faces[faceIndex];
 
     // loop over n-gon triangles fan-style
@@ -103,7 +94,8 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
         const vertex_t &C = scene.vertices[c];
 
         float t, u, v;
-        int has_hit = moeller_trumbore_intersect(ray, A.position, B.position, C.position, &t, &u, &v);
+        int has_hit =
+            moeller_trumbore_intersect(ray, A.position, B.position, C.position, &t, &u, &v);
 
         if (has_hit && t >= 0 && t < hit.distance) {
             hit.faceIndex = faceIndex;
@@ -120,11 +112,11 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             // get color based on https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
             Vec3 color = Vec3::Const(1);
             float alpha = 1;
-            if (hit.mat->textureColor >= 0) {
-                float4 texLookup = tex2D<float4>(scene.textures[hit.mat->textureColor], hit.texcoord0.x, hit.texcoord0.y);
-                Vec3 color_srgb = Vec3(texLookup.x, texLookup.y, texLookup.z);
-                color = linearize_from_srgb(color_srgb);
-                alpha = texLookup.w;
+            if (hit.mat->baseColorTexture >= 0) {
+                const texture_t &tex = scene.textures[hit.mat->baseColorTexture];
+                Vec4 color_lookup = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, true);
+                color = color_lookup.xyz();
+                alpha = color_lookup.w;
             }
             color *= hit.mat->baseColorFactor.xyz();
             alpha *= hit.mat->baseColorFactor.w;
@@ -144,17 +136,33 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             //     hit.color += lookup.w * (lookup_color - hit.color);
             // }
 
+            Vec3 normal, tangent;
+            float tangent_handedness = 1;
+
             switch (face.shading) {
             case FLAT_SHADING:
-                hit.true_normal = face.faceNormal;
+                normal = face.normal;
+                tangent = face.tangent.xyz();
+                tangent_handedness = face.tangent.w;
                 break;
             case BARY_SHADING:
-                hit.true_normal =
-                    barycentric_lincom(scene.vertices[a].normal, scene.vertices[b].normal, scene.vertices[c].normal, t, u, v);
-                hit.true_normal.normalize();
+                normal = barycentric_lincom(A.normal, B.normal, C.normal, t, u, v);
+                tangent = barycentric_lincom(A.tangent.xyz(), B.tangent.xyz(), C.tangent.xyz(),
+                                             t, u, v);
+                tangent_handedness = A.tangent.w;
+                normal.normalize();
+                tangent.normalize();
                 break;
             }
 
+            if (tangent_handedness < 0) {
+                // ensure is in { -1, 1 }
+                tangent_handedness = -1;
+            } else {
+                tangent_handedness = 1;
+            }
+
+            hit.true_normal = normal;
             if (hit.true_normal.dot(ray.r) > 0) {
                 // hit backside of face, mirror normal
                 hit.incident_normal = -hit.true_normal;
@@ -162,10 +170,32 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
                 hit.incident_normal = hit.true_normal;
             }
 
+            // left handed if tangent_handedness == -1
+            Vec3 cotangent = tangent_handedness * normal.cross(tangent);
+
+            // normal.print();
+            // tangent.print();
+            // tangent space: [tangent, cotangent, normal]
+
+            if (hit.mat->normalTexture >= 0) {
+                // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html - 3.9.3.
+                const texture_t &tex = scene.textures[hit.mat->normalTexture];
+                Vec4 coords = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, false);
+                coords = 2 * coords - Vec4::Const(1); // from [0, 1] to [-1, 1]
+                // coords.xyz().print();
+                hit.shaded_normal =
+                    coords.x * tangent + coords.y * cotangent + coords.z * normal;
+                hit.shaded_normal.normalize();
+            } else {
+                hit.shaded_normal = normal;
+            }
+
             CHECK_VEC(hit.true_normal);
             CHECK_VEC(hit.incident_normal);
+            CHECK_VEC(hit.shaded_normal);
             assert(hit.true_normal != Vec3::Zero());
             assert(hit.incident_normal != Vec3::Zero());
+            assert(hit.shaded_normal != Vec3::Zero());
         }
     }
 }

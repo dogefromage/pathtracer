@@ -7,6 +7,7 @@ static int tok_vec3(void *field, char *input) {
         fprintf(stderr, "unable to parse vec3 arg input=%s\n", input);
         return 1;
     }
+    // v.print();
     return 0;
 }
 
@@ -50,6 +51,12 @@ static void parse(int argc, char *argv[], void *field, const char *name,
 
 int load_config(config_t *cfg, int argc, char *argv[]) {
 
+    printf("Reading config from args: ");
+    for (int i = 0; i < argc; i++) {
+        printf("%s ", argv[i]);
+    }
+    printf("\n\n");
+
     parse(argc, argv, &cfg->world_clear_color, "--world-clear-color", tok_vec3);
     parse(argc, argv, &cfg->world_clear_color_texture, "--world-clear-color-texture", tok_path);
 
@@ -66,6 +73,11 @@ int load_config(config_t *cfg, int argc, char *argv[]) {
 
     parse(argc, argv, &cfg->path_gltf, "--path-gltf", tok_path);
     parse(argc, argv, &cfg->dir_output, "--dir-output", tok_path);
+
+    parse(argc, argv, &cfg->default_camera_position, "--default-camera-position", tok_vec3);
+    parse(argc, argv, &cfg->default_camera_target, "--default-camera-target", tok_vec3);
+    parse(argc, argv, &cfg->default_camera_updir, "--default-camera-updir", tok_vec3);
+    parse(argc, argv, &cfg->default_camera_yfov, "--default-camera-yfov", tok_float);
 
     return 0;
 }

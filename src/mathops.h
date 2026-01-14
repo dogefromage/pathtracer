@@ -20,32 +20,33 @@
 
 #define MATH_PLATFORM __host__ __device__
 
-MATH_PLATFORM inline float test_finite(float x) {
-    assert(isfinite(x));
-    return x;
-}
+struct Mat3 {
+    float m[3][3];
 
-template <typename T> struct fixed_array {
-    uint32_t count;
-    T *items;
-
-    MATH_PLATFORM const T &operator[](size_t k) const {
-        assert(k < count);
-        return items[k];
+    MATH_PLATFORM Mat3(float m00, float m01, float m02, float m10, float m11, float m12,
+                       float m20, float m21, float m22) {
+        m[0][0] = m00;
+        m[0][1] = m01;
+        m[0][2] = m02;
+        m[1][0] = m10;
+        m[1][1] = m11;
+        m[1][2] = m12;
+        m[2][0] = m20;
+        m[2][1] = m21;
+        m[2][2] = m22;
     }
 
-    MATH_PLATFORM T &operator[](size_t k) {
-        assert(k < count);
-        return items[k];
+    MATH_PLATFORM void print() const {
+        printf("Mat3\n");
+        printf("| %.2f  %.2f  %.2f |\n", m[0][0], m[0][1], m[0][2]);
+        printf("| %.2f  %.2f  %.2f |\n", m[1][0], m[1][1], m[1][2]);
+        printf("| %.2f  %.2f  %.2f |\n\n", m[2][0], m[2][1], m[2][2]);
+    };
+
+    static MATH_PLATFORM Mat3 Identity() {
+        return {1, 0, 0, 0, 1, 0, 0, 0, 1};
     }
 };
-
-template <typename T>
-void fixed_array_from_vector(fixed_array<T> &dest, const std::vector<T> &src) {
-    dest.count = src.size();
-    dest.items = (T *)malloc(sizeof(T) * dest.count);
-    std::copy(src.begin(), src.end(), dest.items);
-}
 
 struct Vec3 {
     float x, y, z;
@@ -57,7 +58,13 @@ struct Vec3 {
         return {c, c, c};
     }
 
-    MATH_PLATFORM Vec3(float x = 0.0f, float y = 0.0f, float z = 0.0f) : x(x), y(y), z(z) {
+    MATH_PLATFORM Vec3() : x(0), y(0), z(0) {
+    }
+
+    MATH_PLATFORM Vec3(float x, float y, float z) : x(x), y(y), z(z) {
+    }
+
+    MATH_PLATFORM Vec3(float4 f) : x(f.x), y(f.y), z(f.z) {
     }
 
     MATH_PLATFORM void set(float a) {
@@ -187,6 +194,10 @@ struct Vec3 {
         assert(isfinite(y));
         assert(isfinite(z));
     }
+
+    MATH_PLATFORM Mat3 skew() const {
+        return Mat3(0, -z, y, z, 0, -x, -y, x, 0);
+    };
 };
 
 inline MATH_PLATFORM void operator+=(Vec3 &lhs, const Vec3 &rhs) {
@@ -210,7 +221,7 @@ inline MATH_PLATFORM void operator/=(Vec3 &lhs, float a) {
 }
 
 inline MATH_PLATFORM Vec3 operator+(float a, Vec3 v) {
-    return v + a;
+    return v + Vec3::Const(a);
 }
 
 inline MATH_PLATFORM Vec3 operator-(float a, Vec3 v) {
@@ -232,35 +243,83 @@ inline std::ostream &operator<<(std::ostream &os, const Vec3 &a) {
     return os;
 }
 
-struct Mat3 {
-    float m[3][3];
+inline MATH_PLATFORM Vec3 operator*(const Mat3 &m, const Vec3 &v) {
+    return Vec3(ADD(ADD(MUL(m.m[0][0], v.x), MUL(m.m[0][1], v.y)), MUL(m.m[0][2], v.z)),
+                ADD(ADD(MUL(m.m[1][0], v.x), MUL(m.m[1][1], v.y)), MUL(m.m[1][2], v.z)),
+                ADD(ADD(MUL(m.m[2][0], v.x), MUL(m.m[2][1], v.y)), MUL(m.m[2][2], v.z)));
+}
 
-    MATH_PLATFORM Mat3(float m00, float m01, float m02, float m10, float m11, float m12,
-                       float m20, float m21, float m22) {
-        m[0][0] = m00;
-        m[0][1] = m01;
-        m[0][2] = m02;
-        m[1][0] = m10;
-        m[1][1] = m11;
-        m[1][2] = m12;
-        m[2][0] = m20;
-        m[2][1] = m21;
-        m[2][2] = m22;
-    }
+// Mat3 + Mat3
+inline MATH_PLATFORM Mat3 operator+(const Mat3 &a, const Mat3 &b) {
+    return Mat3(ADD(a.m[0][0], b.m[0][0]), ADD(a.m[0][1], b.m[0][1]), ADD(a.m[0][2], b.m[0][2]),
+                ADD(a.m[1][0], b.m[1][0]), ADD(a.m[1][1], b.m[1][1]), ADD(a.m[1][2], b.m[1][2]),
+                ADD(a.m[2][0], b.m[2][0]), ADD(a.m[2][1], b.m[2][1]),
+                ADD(a.m[2][2], b.m[2][2]));
+}
 
-    MATH_PLATFORM Vec3 operator*(const Vec3 &v) const {
-        return Vec3(ADD(ADD(MUL(m[0][0], v.x), MUL(m[0][1], v.y)), MUL(m[0][2], v.z)),
-                    ADD(ADD(MUL(m[1][0], v.x), MUL(m[1][1], v.y)), MUL(m[1][2], v.z)),
-                    ADD(ADD(MUL(m[2][0], v.x), MUL(m[2][1], v.y)), MUL(m[2][2], v.z)));
-    }
-};
+// Mat3 + scalar
+inline MATH_PLATFORM Mat3 operator+(const Mat3 &a, float s) {
+    return Mat3(ADD(a.m[0][0], s), ADD(a.m[0][1], s), ADD(a.m[0][2], s), ADD(a.m[1][0], s),
+                ADD(a.m[1][1], s), ADD(a.m[1][2], s), ADD(a.m[2][0], s), ADD(a.m[2][1], s),
+                ADD(a.m[2][2], s));
+}
+
+// scalar + Mat3 (mirror)
+inline MATH_PLATFORM Mat3 operator+(float s, const Mat3 &a) {
+    return a + s;
+}
+
+// Mat3 * scalar
+inline MATH_PLATFORM Mat3 operator*(const Mat3 &a, float s) {
+    return Mat3(MUL(a.m[0][0], s), MUL(a.m[0][1], s), MUL(a.m[0][2], s), MUL(a.m[1][0], s),
+                MUL(a.m[1][1], s), MUL(a.m[1][2], s), MUL(a.m[2][0], s), MUL(a.m[2][1], s),
+                MUL(a.m[2][2], s));
+}
+
+// scalar * Mat3 (mirror)
+inline MATH_PLATFORM Mat3 operator*(float s, const Mat3 &a) {
+    return a * s;
+}
+
+// Mat3 * Mat3 (matrix multiplication)
+inline MATH_PLATFORM Mat3 operator*(const Mat3 &A, const Mat3 &B) {
+    return Mat3(ADD(ADD(MUL(A.m[0][0], B.m[0][0]), MUL(A.m[0][1], B.m[1][0])),
+                    MUL(A.m[0][2], B.m[2][0])),
+                ADD(ADD(MUL(A.m[0][0], B.m[0][1]), MUL(A.m[0][1], B.m[1][1])),
+                    MUL(A.m[0][2], B.m[2][1])),
+                ADD(ADD(MUL(A.m[0][0], B.m[0][2]), MUL(A.m[0][1], B.m[1][2])),
+                    MUL(A.m[0][2], B.m[2][2])),
+
+                ADD(ADD(MUL(A.m[1][0], B.m[0][0]), MUL(A.m[1][1], B.m[1][0])),
+                    MUL(A.m[1][2], B.m[2][0])),
+                ADD(ADD(MUL(A.m[1][0], B.m[0][1]), MUL(A.m[1][1], B.m[1][1])),
+                    MUL(A.m[1][2], B.m[2][1])),
+                ADD(ADD(MUL(A.m[1][0], B.m[0][2]), MUL(A.m[1][1], B.m[1][2])),
+                    MUL(A.m[1][2], B.m[2][2])),
+
+                ADD(ADD(MUL(A.m[2][0], B.m[0][0]), MUL(A.m[2][1], B.m[1][0])),
+                    MUL(A.m[2][2], B.m[2][0])),
+                ADD(ADD(MUL(A.m[2][0], B.m[0][1]), MUL(A.m[2][1], B.m[1][1])),
+                    MUL(A.m[2][2], B.m[2][1])),
+                ADD(ADD(MUL(A.m[2][0], B.m[0][2]), MUL(A.m[2][1], B.m[1][2])),
+                    MUL(A.m[2][2], B.m[2][2])));
+}
 
 struct Vec4 {
     float x, y, z, w;
 
+    MATH_PLATFORM Vec4() : x(0), y(0), z(0), w(0) {
+    }
+
     // Constructor
-    MATH_PLATFORM Vec4(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 0.0f)
-        : x(x), y(y), z(z), w(w) {
+    MATH_PLATFORM Vec4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {
+    }
+
+    MATH_PLATFORM static Vec4 Zero() {
+        return {0, 0, 0, 0};
+    }
+    MATH_PLATFORM static Vec4 Const(float c) {
+        return {c, c, c, c};
     }
 
     // Set all components to the same value
@@ -270,6 +329,9 @@ struct Vec4 {
 
     MATH_PLATFORM Vec3 xyz() const {
         return {x, y, z};
+    }
+
+    MATH_PLATFORM Vec4(float4 f) : x(f.x), y(f.y), z(f.z), w(f.w) {
     }
 
     // Print vector components
@@ -607,7 +669,20 @@ inline MATH_PLATFORM void operator/=(Spectrum &lhs, float scalar) {
     lhs = lhs / scalar;
 }
 
+inline MATH_PLATFORM Mat3 rodriguezRotation(const Vec3 &_a, const Vec3 &_b) {
+    // finds M such that M * a = b (all normalized)
+    Vec3 a = _a.normalized();
+    Vec3 b = _b.normalized();
+    Vec3 v = a.cross(b);
+    float c = a.dot(b);
+    float s = v.magnitude();
+    Mat3 skew_v = v.skew();
+    Mat3 M = Mat3::Identity() + skew_v + skew_v * skew_v * ((1 - c) / (s * s));
+    return M;
+}
+
 inline MATH_PLATFORM Vec3 projectEquirectangular(const Vec3 &d) {
+
     float phi = atan2f(d.z, d.x);                        // [-pi, pi]
     float theta = acosf(fminf(fmaxf(d.y, -1.0f), 1.0f)); // [0, pi]
 

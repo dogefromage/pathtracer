@@ -233,7 +233,7 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
         // emitting face:
 
         area_light_sample_t als;
-        sample_area_light(als, c, hit.position, hit.true_normal, node.index, false);
+        sample_area_light(als, c, hit.position, hit.incident_normal, node.index, false);
 
         out.dir_hit_to_light = als.dir_hit_to_light;
 
@@ -273,7 +273,7 @@ static __device__ float evaluate_direct_p(context_t &c, const Ray &ray,
             // face
             area_light_sample_t la;
             la.dir_hit_to_light = ray.r;
-            sample_area_light(la, c, hit.position, hit.true_normal, node.index, true);
+            sample_area_light(la, c, hit.position, hit.incident_normal, node.index, true);
             p_node = la.p_als;
         }
 
@@ -295,10 +295,13 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
         intersect(c.bvh, c.scene, ray, hit);
         if (!hit.has_hit) {
             Vec3 equi_uv = projectEquirectangular(ray.r);
-            float4 clear_lookup =
-                tex2D<float4>(c.scene.textures[c.scene.clearTexture], equi_uv.x, equi_uv.y);
-            Vec3 clear_color = Vec3(clear_lookup.x, clear_lookup.y, clear_lookup.z);
-            clear_color *= c.cfg.world_clear_color;
+            Vec3 clear_color = c.cfg.world_clear_color;
+            if (c.scene.clearTexture >= 0) {
+                const texture_t &tex = c.scene.textures[c.scene.clearTexture];
+                // srgb lookup if i use a png for this, but usually hdr textures must be used
+                Vec4 clear_lookup = sample_texture(tex, equi_uv.x, equi_uv.y, true);
+                clear_color *= clear_lookup.xyz();
+            }
             light += throughput * Spectrum::fromRGB(clear_color);
             break;
         }
@@ -321,7 +324,7 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
             bsdf_sample_t lss_bsdf;
             evaluate_bsdf(lss_bsdf, ray.r, lss.dir_hit_to_light, hit, c.rstate);
 
-            float cos_theta_x = std::abs(hit.true_normal.dot(lss.dir_hit_to_light));
+            float cos_theta_x = std::abs(hit.shaded_normal.dot(lss.dir_hit_to_light));
             Spectrum direct_outgoing_radiance =
                 lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
 
@@ -341,11 +344,11 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
         assert(indirect_bsdf.prob_i > 0 && "sample with 0 probability");
 
         // set next ray
-        initialize_safe_ray(ray, hit.position, indirect_bsdf.omega_i, hit.true_normal);
+        initialize_safe_ray(ray, hit.position, indirect_bsdf.omega_i, hit.incident_normal);
         float p_direct = evaluate_direct_p(c, ray, hit);
         float weight = indirect_bsdf.prob_i / (p_direct + indirect_bsdf.prob_i);
 
-        float cos_theta = std::abs(hit.true_normal.dot(indirect_bsdf.omega_i));
+        float cos_theta = std::abs(hit.shaded_normal.dot(indirect_bsdf.omega_i));
         // find next throughput
         throughput *=
             indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
