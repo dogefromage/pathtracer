@@ -293,6 +293,7 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
     for (int depth = 0;; depth++) {
         intersection_t hit;
         intersect(c.bvh, c.scene, ray, hit);
+
         if (!hit.has_hit) {
             Vec3 equi_uv = projectEquirectangular(ray.r);
             Vec3 clear_color = c.cfg.world_clear_color;
@@ -304,6 +305,13 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
             }
             light += throughput * Spectrum::fromRGB(clear_color);
             break;
+        }
+
+        // alpha blending
+        if (random_uniform(c.rstate) >= hit.alpha) {
+            // ray passes through face here
+            initialize_safe_ray(ray, hit.position, ray.r, -hit.incident_normal);
+            continue;
         }
 
         // EMISSIVE LIGHT
@@ -389,7 +397,7 @@ __global__ void render_kernel(Vec3 *img, const BVH bvh, const Scene scene, const
         total_light += current_light;
     }
 
-    total_light *= cfg.output_exposure;
+    total_light *= powf(2.0f, cfg.output_exposure);
 
     total_light /= (float)current_samples;
     Vec3 pixel_color = total_light.toRGB();

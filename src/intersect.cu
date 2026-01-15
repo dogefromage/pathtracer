@@ -110,31 +110,25 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             hit.texcoord0 = barycentric_lincom(A.texcoord0, B.texcoord0, C.texcoord0, t, u, v);
 
             // get color based on https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
-            Vec3 color = Vec3::Const(1);
-            float alpha = 1;
+            hit.color = hit.mat->baseColorFactor.xyz();
+            hit.alpha = hit.mat->baseColorFactor.w;
             if (hit.mat->baseColorTexture >= 0) {
                 const texture_t &tex = scene.textures[hit.mat->baseColorTexture];
                 Vec4 color_lookup = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, true);
-                color = color_lookup.xyz();
-                alpha = color_lookup.w;
+                hit.color *= color_lookup.xyz();
+                hit.alpha *= color_lookup.w;
             }
-            color *= hit.mat->baseColorFactor.xyz();
-            alpha *= hit.mat->baseColorFactor.w;
 
-            hit.color = color;
-
-            // TODO interpret alpha for some kind of transparency
-            // switch (hit.mat->alphaMode) {
-            // case ALPHA_OPAQUE:
-            //     hit.color = texColor;
-            //     break;
-            // case ALPHA_MASK:
-            //     if (texLookup.w > hit.mat->alphaCutoff) {
-            //         hit.color = texColor;
-            //     }
-            // case ALPHA_BLEND:
-            //     hit.color += lookup.w * (lookup_color - hit.color);
-            // }
+            switch (hit.mat->alphaMode) {
+            case ALPHA_OPAQUE:
+                hit.alpha = 1.0;
+                break;
+            case ALPHA_MASK:
+                hit.alpha = hit.alpha > hit.mat->alphaCutoff ? 1.0 : 0.0;
+                break;
+            case ALPHA_BLEND:
+                break; // keep
+            }
 
             Vec3 normal, tangent;
             float tangent_handedness = 1;

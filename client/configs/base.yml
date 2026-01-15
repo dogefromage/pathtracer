@@ -12,8 +12,9 @@ inputs:
   # - assets/many_lights.gltf
   # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
   # - ../glTF-Sample-Models/2.0/TextureSettingsTest/glTF/TextureSettingsTest.gltf
-  - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
+  # - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
   # - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
+  - ../glTF-Sample-Models/2.0/AlphaBlendModeTest/glTF/AlphaBlendModeTest.gltf
   # - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
   # - assets/textured_plane.gltf
 
@@ -33,7 +34,7 @@ pathtracer:
     # resolution-y: 2000
     resolution-x: 1024
     resolution-y: 1024
-    exposure: 2
+    exposure: 0
 
   sampling:
     seed: 42
@@ -55,7 +56,7 @@ pathtracer:
     # updir: 0 1 0
     # yfov: 1
     # IF SOMETHIGN IS IN CENTER
-    position: 0 0 5
+    position: 0 0 10
     target: 0 0 0
     updir: 0 1 0
     yfov: 0.8
