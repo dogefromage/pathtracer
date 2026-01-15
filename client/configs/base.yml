@@ -12,8 +12,8 @@ inputs:
   # - assets/many_lights.gltf
   # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
   # - ../glTF-Sample-Models/2.0/TextureSettingsTest/glTF/TextureSettingsTest.gltf
-  # - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
-  - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
+  - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
+  # - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
   # - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
   # - assets/textured_plane.gltf
 

@@ -16,7 +16,7 @@
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #include "tiny_gltf/tiny_gltf.h"
 
-// #include "MikkTSpace/mikktspace.h"
+#include "MikkTSpace/mikktspace.h"
 
 namespace tg = tinygltf;
 namespace fs = std::filesystem;
@@ -364,6 +364,102 @@ static void scene_parse_acc_indices(std::vector<uint32_t> &list, const tg::Model
     log_trace("Indices scanned in range [%d, %d]\n", min, max);
 }
 
+static void calculate_tangents(temp_scene_t &scene, int firstFace, int numFaces) {
+
+    typedef struct {
+        temp_scene_t *scene;
+        int firstFace, numFaces;
+    } user_data_t;
+
+    user_data_t user_data = {.scene = &scene, .firstFace = firstFace, .numFaces = numFaces};
+
+    // Returns the number of faces (triangles/quads) on the mesh to be processed.
+    auto getNumFaces = [](const SMikkTSpaceContext *context) -> int32_t {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        return data->numFaces;
+    };
+
+    // Returns the number of vertices on face number iFace
+    // iFace is a number in the range {0, 1, ..., getNumFaces()-1}
+    auto getNumVerticesOfFace = [](const SMikkTSpaceContext *context,
+                                   const int32_t iFace) -> int32_t {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        int faceIndex = data->firstFace + iFace;
+        return data->scene->faces[faceIndex].vertexCount;
+    };
+
+    // returns the position/normal/texcoord of the referenced face of vertex number iVert.
+    // iVert is in the range {0,1,2} for triangles and {0,1,2,3} for quads.
+    auto getPosition = [](const SMikkTSpaceContext *context, float posOut[],
+                          const int32_t iFace, const int32_t iVert) -> void {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        int faceIndex = data->firstFace + iFace;
+        int vertIndex = data->scene->faces[faceIndex].vertices[iVert];
+        const Vec3 &position = data->scene->vertices[vertIndex].position;
+        for (int i = 0; i < 3; i++) {
+            posOut[i] = position[i];
+        }
+    };
+
+    auto getNormal = [](const SMikkTSpaceContext *context, float normOut[], const int32_t iFace,
+                        const int32_t iVert) -> void {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        int faceIndex = data->firstFace + iFace;
+        int vertIndex = data->scene->faces[faceIndex].vertices[iVert];
+        const Vec3 &normal = data->scene->vertices[vertIndex].normal;
+        for (int i = 0; i < 3; i++) {
+            normOut[i] = normal[i];
+        }
+    };
+
+    auto getTexCoord = [](const SMikkTSpaceContext *context, float uvOut[], const int32_t iFace,
+                          const int32_t iVert) -> void {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        int faceIndex = data->firstFace + iFace;
+        int vertIndex = data->scene->faces[faceIndex].vertices[iVert];
+        const Vec3 &texcoord0 = data->scene->vertices[vertIndex].texcoord0;
+        for (int i = 0; i < 2; i++) {
+            uvOut[i] = texcoord0[i];
+        }
+    };
+
+    // This function is used to return the tangent and fSign to the application.
+    // fvTangent is a unit length vector.
+    // For normal maps it is sufficient to use the following simplified version of the bitangent
+    // which is generated at pixel/vertex level. bitangent = fSign * cross(vN, tangent); Note
+    // that the results are returned unindexed. It is possible to generate a new index list But
+    // averaging/overwriting tangent spaces by using an already existing index list WILL produce
+    // INCRORRECT results. DO NOT! use an already existing index list.
+    auto setTSpaceBasic = [](const SMikkTSpaceContext *context, const float mikkTangent[],
+                             const float sign, const int32_t iFace, const int32_t iVert) {
+        user_data_t *data = (user_data_t *)context->m_pUserData;
+        int faceIndex = data->firstFace + iFace;
+        int vertIndex = data->scene->faces[faceIndex].vertices[iVert];
+        Vec4 &tangent = data->scene->vertices[vertIndex].tangent;
+        for (int i = 0; i < 3; i++) {
+            tangent[i] = mikkTangent[i];
+        }
+        tangent.w = -sign;
+    };
+
+    SMikkTSpaceInterface mikktspace_i = {
+        .m_getNumFaces = getNumFaces,
+        .m_getNumVerticesOfFace = getNumVerticesOfFace,
+        .m_getPosition = getPosition,
+        .m_getNormal = getNormal,
+        .m_getTexCoord = getTexCoord,
+        .m_setTSpaceBasic = setTSpaceBasic,
+    };
+    SMikkTSpaceContext mikktspace_c;
+    mikktspace_c.m_pInterface = &mikktspace_i;
+    mikktspace_c.m_pUserData = &user_data;
+
+    if (!genTangSpaceDefault(&mikktspace_c)) {
+        log_error("Mikktspace tangent calculation failed!\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::Node &node,
                        const Mat4 &modelTransform) {
     log_trace("Parsing mesh of node: %s\n", node.name.c_str());
@@ -379,8 +475,8 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
         }
 
         std::vector<Vec3> positions;
-        std::vector<Vec4> tangents;
-        std::vector<Vec3> normals;
+        std::vector<Vec4> vertexTangents;
+        std::vector<Vec3> vertexNormals;
         std::vector<Vec3> texcoord0;
         std::vector<uint32_t> indices;
 
@@ -390,10 +486,10 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
                 scene_parse_acc_to_vec(positions, model, attr.second, 3);
             } else if (attr.first == "NORMAL") {
                 log_trace("Scanning NORMAL\n");
-                scene_parse_acc_to_vec(normals, model, attr.second, 3);
+                scene_parse_acc_to_vec(vertexNormals, model, attr.second, 3);
             } else if (attr.first == "TANGENT") {
                 log_trace("Scanning TANGENT\n");
-                scene_parse_acc_to_vec(tangents, model, attr.second, 4);
+                scene_parse_acc_to_vec(vertexTangents, model, attr.second, 4);
             } else if (attr.first == "TEXCOORD_0") {
                 log_trace("Scanning TEXCOORD_0\n");
                 scene_parse_acc_to_vec(texcoord0, model, attr.second, 2);
@@ -408,11 +504,11 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
         int vertCount = positions.size();
         assert(vertCount);
 
-        bool hasNormals = normals.size() > 0;
-        assert(!hasNormals || normals.size() == vertCount);
+        bool hasVertexNormals = vertexNormals.size() > 0;
+        assert(!hasVertexNormals || vertexNormals.size() == vertCount);
 
-        bool hasTangents = tangents.size() > 0;
-        assert(!hasTangents || tangents.size() == vertCount);
+        bool hasVertexTangents = vertexTangents.size() > 0;
+        assert(!hasVertexTangents || vertexTangents.size() == vertCount);
 
         bool hasTexcoord0 = texcoord0.size() > 0;
         assert(!hasTexcoord0 || texcoord0.size() == vertCount);
@@ -430,19 +526,20 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
             Vec4 p = modelTransform * Vec4::toHomogeneous(positions[i]);
             v.position = p.dehomogenise();
 
-            if (hasNormals) {
-                v.normal = linearModelTransform * normals[i];
+            if (hasVertexNormals) {
+                v.normal = linearModelTransform * vertexNormals[i];
                 v.normal.normalize();
             } else {
-                v.normal.set(0);
+                v.normal.set(0); // not used, face normals will be used here
             }
 
-            if (hasTangents) {
-                Vec3 tw = linearModelTransform * tangents[i].xyz();
+            if (hasVertexNormals && hasVertexTangents) {
+                // tangents should be ignored if no normals otherwise would not make much sense
+                Vec3 tw = linearModelTransform * vertexTangents[i].xyz();
                 tw.normalize();
-                v.tangent = Vec4(tw.x, tw.y, tw.z, tangents[i].w); // include handedness
+                v.tangent = Vec4(tw.x, tw.y, tw.z, vertexTangents[i].w); // include handedness
             } else {
-                v.tangent.set(0);
+                v.tangent.set(0); // will be calculated later if hasVertexNormals
             }
 
             if (hasTexcoord0) {
@@ -454,6 +551,8 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
             scene.vertices.push_back(v);
         }
 
+        int firstFaceOfPrimitive = scene.faces.size();
+
         for (int i = 0; i < numIndices; i += 3) {
             face_t face;
             face.material = prim.material;
@@ -463,7 +562,7 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
             face.vertices[1] = firstVertexIndex + indices[i + 1];
             face.vertices[2] = firstVertexIndex + indices[i + 2];
 
-            if (hasNormals) {
+            if (hasVertexNormals) {
                 face.shading = BARY_SHADING;
                 face.normal.set(0);
                 face.tangent.set(0);
@@ -475,10 +574,21 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
                 const Vec3 &B = scene.vertices[face.vertices[1]].position;
                 const Vec3 &C = scene.vertices[face.vertices[2]].position;
                 face.normal = (B - A).cross(C - A).normalized();
-                face.tangent.set(0); // TODO !!!
+
+                // https://github.com/KhronosGroup/glTF/issues/2480
+                // anisotropic materials are rarely seen with flat shading (missing normals)
+                // a workaround would be a pain to implement
+                face.tangent.set(0);
             }
 
             scene.faces.push_back(face);
+        }
+
+        if (hasVertexNormals && !hasVertexTangents) {
+            // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+            // must calculate tangents here using mikktspace after gltf spec
+            int numFaces = scene.faces.size() - firstFaceOfPrimitive;
+            calculate_tangents(scene, firstFaceOfPrimitive, numFaces);
         }
 
         log_trace("Done with primitive\n");

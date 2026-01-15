@@ -150,8 +150,7 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
                 tangent = barycentric_lincom(A.tangent.xyz(), B.tangent.xyz(), C.tangent.xyz(),
                                              t, u, v);
                 tangent_handedness = A.tangent.w;
-                normal.normalize();
-                tangent.normalize();
+                // do not normalize basis now. mikktspace says its more accurate to do so later
                 break;
             }
 
@@ -185,10 +184,13 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
                 // coords.xyz().print();
                 hit.shaded_normal =
                     coords.x * tangent + coords.y * cotangent + coords.z * normal;
-                hit.shaded_normal.normalize();
             } else {
                 hit.shaded_normal = normal;
             }
+
+            hit.true_normal.normalize();
+            hit.incident_normal.normalize();
+            hit.shaded_normal.normalize();
 
             CHECK_VEC(hit.true_normal);
             CHECK_VEC(hit.incident_normal);
