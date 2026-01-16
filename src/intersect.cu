@@ -110,12 +110,12 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             hit.texcoord0 = barycentric_lincom(A.texcoord0, B.texcoord0, C.texcoord0, t, u, v);
 
             // get color based on https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
-            hit.color = hit.mat->baseColorFactor.xyz();
+            hit.brdf.base_color = hit.mat->baseColorFactor.xyz();
             hit.alpha = hit.mat->baseColorFactor.w;
             if (hit.mat->baseColorTexture >= 0) {
                 const texture_t &tex = scene.textures[hit.mat->baseColorTexture];
                 Vec4 color_lookup = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, true);
-                hit.color *= color_lookup.xyz();
+                hit.brdf.base_color *= color_lookup.xyz();
                 hit.alpha *= color_lookup.w;
             }
 
@@ -155,40 +155,42 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
                 tangent_handedness = 1;
             }
 
-            hit.true_normal = normal;
-            if (hit.true_normal.dot(ray.r) > 0) {
-                // hit backside of face, mirror normal
-                hit.incident_normal = -hit.true_normal;
-            } else {
-                hit.incident_normal = hit.true_normal;
-            }
+            hit.true_normal = normal; // keeps pointing in correct dir even if backface hit
 
             // left handed if tangent_handedness == -1
-            Vec3 cotangent = tangent_handedness * normal.cross(tangent);
+            Vec3 bitangent = tangent_handedness * normal.cross(tangent);
+            tangent.normalize();
+            bitangent.normalize();
+            normal.normalize();
 
-            // normal.print();
-            // tangent.print();
-            // tangent space: [tangent, cotangent, normal]
+            if (normal.dot(ray.r) > 0) {
+                // hit backside of face, flip everything that must be flipped
+                tangent *= -1;
+                bitangent *= -1;
+                normal *= -1;
+            }
+
+            hit.incident_normal = normal;
+            hit.tangentBasis = mat3FromColumns(tangent, bitangent, normal);
 
             if (hit.mat->normalTexture >= 0) {
                 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html - 3.9.3.
                 const texture_t &tex = scene.textures[hit.mat->normalTexture];
                 Vec4 coords = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, false);
-                coords = 2 * coords - Vec4::Const(1); // from [0, 1] to [-1, 1]
-                // coords.xyz().print();
-                hit.shaded_normal =
-                    coords.x * tangent + coords.y * cotangent + coords.z * normal;
+                coords = 2 * coords - Vec4::Const(1);
+                hit.shaded_normal = hit.tangentBasis * coords.xyz();
+                hit.shaded_normal.normalize();
             } else {
                 hit.shaded_normal = normal;
             }
 
-            hit.true_normal.normalize();
-            hit.incident_normal.normalize();
-            hit.shaded_normal.normalize();
-
+            CHECK_VEC(tangent);
+            CHECK_VEC(bitangent);
             CHECK_VEC(hit.true_normal);
             CHECK_VEC(hit.incident_normal);
             CHECK_VEC(hit.shaded_normal);
+            assert(tangent != Vec3::Zero());
+            assert(bitangent != Vec3::Zero());
             assert(hit.true_normal != Vec3::Zero());
             assert(hit.incident_normal != Vec3::Zero());
             assert(hit.shaded_normal != Vec3::Zero());

@@ -36,7 +36,7 @@ static int tok_path(void *field, char *input) {
 }
 
 static void parse(int argc, char *argv[], void *field, const char *name,
-                  int tokenizer(void *, char *)) {
+                  int tokenizer(void *, char *), bool optional = false) {
 
     for (int i = 1; i < argc - 1; i++) {
         // printf("TEST %s    %s\n", argv[i], name);
@@ -46,7 +46,10 @@ static void parse(int argc, char *argv[], void *field, const char *name,
             return;
         }
     }
-    fprintf(stderr, "unable to find config item '%s'. all items are required.\n", name);
+
+    if (!optional) {
+        fprintf(stderr, "ERROR unable to find required config item '%s'.\n", name);
+    }
 }
 
 int load_config(config_t *cfg, int argc, char *argv[]) {
@@ -57,7 +60,7 @@ int load_config(config_t *cfg, int argc, char *argv[]) {
     }
     printf("\n\n");
 
-    parse(argc, argv, &cfg->world_clear_color, "--world-clear-color", tok_vec3);
+    parse(argc, argv, &cfg->world_clear_color, "--world-clear-color", tok_vec3, true);
     parse(argc, argv, &cfg->world_clear_color_texture, "--world-clear-color-texture", tok_path);
 
     parse(argc, argv, &cfg->seed, "--sampling-seed", tok_int);

@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "brdf.h"
 #include "config.h"
 #include "mathops.h"
 #include "utils.h"

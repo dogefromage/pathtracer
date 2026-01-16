@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-#include "bsdf.h"
+#include "brdf.h"
 #include "headers.h"
 #include "lst.h"
 #include "mathops.h"
@@ -57,9 +57,10 @@ static __device__ void get_camera_ray(Ray &ray, const Scene &scene, float u, flo
 
 static __device__ void initialize_safe_ray(Ray &ray, const Vec3 &origin, const Vec3 &dir,
                                            const Vec3 &normal) {
-    bool transmit = dir.dot(normal) < 0;
+    // bool transmit = dir.dot(normal) < 0;
+    // ray.o = origin + SAVE_RAY_EPS * (transmit ? -normal : normal);
 
-    ray.o = origin + SAVE_RAY_EPS * (transmit ? -normal : normal);
+    ray.o = origin + SAVE_RAY_EPS * normal;
     ray.r = dir;
 }
 
@@ -179,8 +180,6 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
         if (light.type == LIGHT_POINT) {
             // TODO check maths to add radius
             Vec3 light_pos = light.position;
-            // float light_rad = 0.1;
-            // + light_rad * sphere_sample_uniform(c.rstate);
 
             Vec3 dir_hit_to_light = light_pos - hit.position;
             float distance = dir_hit_to_light.magnitude();
@@ -188,7 +187,7 @@ static __device__ void sample_light_source(light_source_sample_t &out, context_t
 
             Ray shadow_ray;
             initialize_safe_ray(shadow_ray, hit.position, out.dir_hit_to_light,
-                                hit.true_normal);
+                                hit.incident_normal);
 
             intersection_t light_hit;
             intersect(c.bvh, c.scene, shadow_ray, light_hit);
@@ -323,43 +322,37 @@ static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
             break; // ray dies
         }
 
+        // material outgoing light pointing towards camera
+        Mat3 tangentBasisTransposed = hit.tangentBasis.transposed();
+        Vec3 wo_ts = tangentBasisTransposed * -ray.r;
+
         // DIRECT LIGHT
         light_source_sample_t lss;
         sample_light_source(lss, c, ray, hit);
 
         if (lss.p_lss > 0) {
-
-            bsdf_sample_t lss_bsdf;
-            evaluate_bsdf(lss_bsdf, ray.r, lss.dir_hit_to_light, hit, c.rstate);
-
-            float cos_theta_x = std::abs(hit.shaded_normal.dot(lss.dir_hit_to_light));
-            Spectrum direct_outgoing_radiance =
-                lss_bsdf.bsdf * lss.incoming_radiance * cos_theta_x;
-
+            Vec3 l_ts = tangentBasisTransposed * lss.dir_hit_to_light;
+            float lss_brdf_p = hit.brdf.pdf(wo_ts, l_ts);
+            Spectrum lss_brdf_f_cos_theta = hit.brdf.eval(wo_ts, l_ts);
+            Spectrum direct_outgoing_radiance = lss_brdf_f_cos_theta * lss.incoming_radiance;
             // balance heuristic on part of direct light
-            float weight = lss.p_lss / (lss.p_lss + lss_bsdf.prob_i);
+            float weight = lss.p_lss / (lss.p_lss + lss_brdf_p);
             // printf("%.2f, %.2f\n", lss.p_direct, lss.light_dir_bsdf.prob_i);
             light += (weight / lss.p_lss) * throughput * direct_outgoing_radiance;
         }
 
         // INDIRECT LIGHT
-        bsdf_sample_t indirect_bsdf;
-        sample_bsdf(indirect_bsdf, ray.r, hit, c.rstate);
-        // if (!(indirect_bsdf.prob_i > 0)) {
-        //     printf("indirect_bsdf.prob_i = %.3f\n", indirect_bsdf.prob_i);
-        //     // indirect_bsdf.prob_i = 0;
-        // }
-        assert(indirect_bsdf.prob_i > 0 && "sample with 0 probability");
+        brdf_sample_t brdf_sample = hit.brdf.sample(wo_ts, c.rstate);
+        assert(brdf_sample.pdf > 0 && "sample with 0 probability");
 
         // set next ray
-        initialize_safe_ray(ray, hit.position, indirect_bsdf.omega_i, hit.incident_normal);
+        Vec3 wi_global = hit.tangentBasis * brdf_sample.wi;
+        initialize_safe_ray(ray, hit.position, wi_global, hit.incident_normal);
         float p_direct = evaluate_direct_p(c, ray, hit);
-        float weight = indirect_bsdf.prob_i / (p_direct + indirect_bsdf.prob_i);
+        float weight = brdf_sample.pdf / (p_direct + brdf_sample.pdf);
 
-        float cos_theta = std::abs(hit.shaded_normal.dot(indirect_bsdf.omega_i));
         // find next throughput
-        throughput *=
-            indirect_bsdf.bsdf * (weight * cos_theta / (indirect_bsdf.prob_i * rr_prob));
+        throughput *= brdf_sample.f_cos_theta * (weight / (brdf_sample.pdf * rr_prob));
     }
 
     return light;

@@ -579,6 +579,10 @@ static void parse_mesh(temp_scene_t &scene, const tg::Model &model, const tg::No
                 // anisotropic materials are rarely seen with flat shading (missing normals)
                 // a workaround would be a pain to implement
                 face.tangent.set(0);
+                assert(false);
+                // TODO, if i am still using TBN and its transpose in future then
+                // this must be somehow fixed. i think i can just use mikktspace as well
+                // but just give the face normal if its flat shaded. must test...
             }
 
             scene.faces.push_back(face);
@@ -917,13 +921,15 @@ void Scene::read_gltf(const char *filename, config_t &config) {
     // additional stuff from config
     // clear color and texture
     this->clearColor = config.world_clear_color;
-    fs::path path_clear_color_texture = config.world_clear_color_texture;
-    image_resource_t clear_color_image_resource = load_image(path_clear_color_texture);
+    if (config.world_clear_color_texture[0]) { // if set
+        fs::path path_clear_color_texture = config.world_clear_color_texture;
+        image_resource_t clear_color_image_resource = load_image(path_clear_color_texture);
 
-    this->clearTexture =
-        load_texture(textures, clear_color_image_resource, TINYGLTF_TEXTURE_FILTER_LINEAR,
-                     TINYGLTF_TEXTURE_FILTER_LINEAR, TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT,
-                     TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT);
+        this->clearTexture =
+            load_texture(textures, clear_color_image_resource, TINYGLTF_TEXTURE_FILTER_LINEAR,
+                         TINYGLTF_TEXTURE_FILTER_LINEAR, TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT,
+                         TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT);
+    }
 
     // FINALIZE CLASS
     this->_location = CudaLocation::Host;

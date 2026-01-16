@@ -12,7 +12,7 @@ struct config_t {
     int samples, seed, samples_every_update;
 
     Vec3 world_clear_color;
-    path_t world_clear_color_texture;
+    path_t world_clear_color_texture{}; // default all zeros
 
     int log_level, log_stdout;
 

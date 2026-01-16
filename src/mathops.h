@@ -23,6 +23,9 @@
 struct Mat3 {
     float m[3][3];
 
+    MATH_PLATFORM Mat3() : m{} {
+    }
+
     MATH_PLATFORM Mat3(float m00, float m01, float m02, float m10, float m11, float m12,
                        float m20, float m21, float m22) {
         m[0][0] = m00;
@@ -36,16 +39,21 @@ struct Mat3 {
         m[2][2] = m22;
     }
 
+    static MATH_PLATFORM Mat3 Identity() {
+        return {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    }
+
+    Mat3 MATH_PLATFORM transposed() const {
+        return Mat3(m[0][0], m[1][0], m[2][0], m[0][1], m[1][1], m[2][1], m[0][2], m[1][2],
+                    m[2][2]);
+    }
+
     MATH_PLATFORM void print() const {
         printf("Mat3\n");
         printf("| %.2f  %.2f  %.2f |\n", m[0][0], m[0][1], m[0][2]);
         printf("| %.2f  %.2f  %.2f |\n", m[1][0], m[1][1], m[1][2]);
         printf("| %.2f  %.2f  %.2f |\n\n", m[2][0], m[2][1], m[2][2]);
     };
-
-    static MATH_PLATFORM Mat3 Identity() {
-        return {1, 0, 0, 0, 1, 0, 0, 0, 1};
-    }
 };
 
 struct Vec3 {
@@ -132,7 +140,7 @@ struct Vec3 {
         *this = Vec3(MUL(x, t), MUL(y, t), MUL(z, t));
     }
 
-    MATH_PLATFORM bool epsilonEquals(const Vec3 &other, float epsilon = 1e-6f) const {
+    MATH_PLATFORM bool epsilonEquals(const Vec3 &other, float epsilon = 1e-7f) const {
         return (fabs(SUB(x, other.x)) < epsilon) && (fabs(SUB(y, other.y)) < epsilon) &&
                (fabs(SUB(z, other.z)) < epsilon);
     }
@@ -199,6 +207,16 @@ struct Vec3 {
         return Mat3(0, -z, y, z, 0, -x, -y, x, 0);
     };
 };
+
+inline MATH_PLATFORM Mat3 mat3FromColumns(Vec3 a, Vec3 b, Vec3 c) {
+    Mat3 out;
+    for (int i = 0; i < 3; i++) {
+        out.m[i][0] = a[i];
+        out.m[i][1] = b[i];
+        out.m[i][2] = c[i];
+    }
+    return out;
+}
 
 inline MATH_PLATFORM void operator+=(Vec3 &lhs, const Vec3 &rhs) {
     lhs = lhs + rhs;
@@ -279,6 +297,10 @@ inline MATH_PLATFORM Mat3 operator*(const Mat3 &a, float s) {
 // scalar * Mat3 (mirror)
 inline MATH_PLATFORM Mat3 operator*(float s, const Mat3 &a) {
     return a * s;
+}
+
+inline MATH_PLATFORM void operator*=(Mat3 &lhs, float a) {
+    lhs = lhs * a;
 }
 
 // Mat3 * Mat3 (matrix multiplication)

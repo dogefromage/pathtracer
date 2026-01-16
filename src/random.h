@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "headers.h"
+#include "mathops.h"
 
 typedef struct {
     curandState curand;
@@ -14,3 +15,5 @@ __device__ void random_init(rand_state_t &rstate, uint64_t seed, uint64_t tid);
 __device__ float random_uniform(rand_state_t &rstate);
 
 __device__ float random_normal(rand_state_t &rstate);
+
+__device__ Vec3 sphere_sample_uniform(rand_state_t &rstate);
