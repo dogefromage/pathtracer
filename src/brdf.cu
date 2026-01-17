@@ -1,26 +1,59 @@
 #include "brdf.h"
 
-// // //
-// //
-// https://blog.demofox.org/2017/01/09/raytracing-reflection-refraction-fresnel-total-internal-reflection-and-beers-law/
-// // static __device__ float fresnel_reflect_amount(float n1, float n2, Vec3 normal, Vec3
-// v_inv) {
-// //     // Schlick aproximation
-// //     float r0 = (n1 - n2) / (n1 + n2);
-// //     r0 *= r0;
-// //     float cosX = -normal.dot(v_inv);
-// //     if (n1 > n2) {
-// //         float n = n1 / n2;
-// //         float sinT2 = n * n * (1.0 - cosX * cosX);
-// //         // Total internal reflection
-// //         if (sinT2 > 1.0)
-// //             return 1.0;
-// //         cosX = SQRT(1.0 - sinT2);
-// //     }
-// //     float x = 1.0 - cosX;
-// //     float ret = r0 + (1.0 - r0) * x * x * x * x * x;
-// //     return ret;
-// // }
+__device__ Spectrum fresnel_schlick(Spectrum F0, Vec3 v, Vec3 h) {
+    // https://www.youtube.com/watch?v=gya7x9H3mV0
+    float x = (1 - v.dot(h));
+    return F0 + (Spectrum::Identity() - F0) * x * x * x * x * x;
+}
+
+__device__ float normal_factor_ggx(Vec3 h, float roughness) {
+    // https://www.youtube.com/watch?v=gya7x9H3mV0
+    float n_dot_h = h.z;
+    float alpha = roughness * roughness;
+    float b = n_dot_h * n_dot_h * (alpha * alpha - 1.0f) + 1.0f;
+    float D_ggx = alpha * alpha / (M_PIf * b * b);
+    return D_ggx;
+}
+
+__device__ float geometry_g1_schlick_ggx(Vec3 v, float roughness) {
+    // https://www.youtube.com/watch?v=gya7x9H3mV0
+    float alpha = roughness * roughness;
+    float k = 0.5 * alpha;
+    float n_dot_v = v.z;
+    float g1_schlick_ggx = n_dot_v / (n_dot_v * (1.0f - k) + k);
+    return g1_schlick_ggx;
+}
+
+__device__ float geometry_schlick_ggx(Vec3 l, Vec3 v, float roughness) {
+    float G_l = geometry_g1_schlick_ggx(l, roughness);
+    float G_v = geometry_g1_schlick_ggx(v, roughness);
+    return G_l * G_v;
+}
+
+__device__ Spectrum brdf_microfacet(const Vec3 &l, const Vec3 &v, float metallic,
+                                    float roughness, const Spectrum &baseColor,
+                                    float specular) {
+    Vec3 h = (l + v).normalized();
+
+    Spectrum F0_diel = (0.16 * specular * specular) * Spectrum::Identity();
+    // metallic specularity is dependent on color, dielectric is neutral and max 16% of light
+    Spectrum F0 = metallic * baseColor + (1 - metallic) * F0_diel;
+    Spectrum F = fresnel_schlick(F0, v, h);
+    float D = normal_factor_ggx(h, roughness);
+    float G = geometry_schlick_ggx(l, v, roughness);
+
+    float n_dot_v = fmaxf(v.z, 0.001f); // prevent div/0
+    float n_dot_l = fmaxf(l.z, 0.001f); // prevent div/0
+
+    Spectrum f_spec = (F * D * G) / (4.0f * n_dot_v * n_dot_l);
+
+    float one_over_pi = M_1_PIf;
+    Spectrum f_diff = baseColor * (Spectrum::Identity() - F) * (1.0 - metallic) * one_over_pi;
+
+    Spectrum f = f_diff + f_spec;
+
+    return f;
+}
 
 // static __device__ Vec3 reflect(Vec3 normal, Vec3 v_inv) {
 //     return v_inv - 2 * normal.dot(v_inv) * normal;
@@ -74,7 +107,7 @@
 // //         out.omega_i = refract(n1, n2, hit.incident_normal, v_inv);
 // //         out.prob_i = 1 - R;
 // //         float cos_theta = std::abs(out.omega_i.dot(hit.incident_normal));
-// //         out.bsdf = (1 - R) / cos_theta * Spectrum::Itentity();
+// //         out.bsdf = (1 - R) / cos_theta * Spectrum::Identity();
 // //     }
 // // }
 
@@ -129,18 +162,23 @@
 // }
 
 __device__ Spectrum BRDF::eval(const Vec3 &wo, const Vec3 &wi) const {
-    // diffuse
     float cos_theta_wi = fmaxf(wi.z, 0);
-    return cos_theta_wi / M_PIf * Spectrum::fromRGB(base_color);
+
+    // // diffuse
+    // Spectrum f_diffuse_only = Spectrum::fromRGB(base_color) / M_PIf;
+    // return cos_theta_wi * f_diffuse_only;
+
+    Spectrum f_microfacet = brdf_microfacet(wi, wo, metallic, roughness, baseColor, specular);
+    return f_microfacet * cos_theta_wi;
 }
 
 __device__ float BRDF::pdf(const Vec3 &wo, const Vec3 &wi) const {
-    // diffuse
+    // uniform sampling
     return 1.0 / (2 * M_PIf);
 }
 
 __device__ brdf_sample_t BRDF::sample(const Vec3 &wo, rand_state_t &rstate) const {
-    // // diffuse
+    // uniform sampling
     Vec3 wi = sphere_sample_uniform(rstate);
     wi.z = std::abs(wi.z);
 

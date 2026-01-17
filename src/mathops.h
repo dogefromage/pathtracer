@@ -647,7 +647,7 @@ struct Spectrum {
         return Spectrum(Vec3::Zero());
     }
 
-    MATH_PLATFORM static Spectrum Itentity() {
+    MATH_PLATFORM static Spectrum Identity() {
         return Spectrum(Vec3::Const(1));
     }
 
@@ -658,9 +658,15 @@ struct Spectrum {
     MATH_PLATFORM Spectrum operator+(const Spectrum &other) const {
         return Spectrum(rgb + other.rgb);
     }
+
     MATH_PLATFORM Spectrum operator*(const Spectrum &other) const {
         return Spectrum(rgb * other.rgb);
     }
+
+    MATH_PLATFORM Spectrum operator-(const Spectrum &other) const {
+        return Spectrum(rgb - other.rgb);
+    }
+
     MATH_PLATFORM Spectrum operator*(float scalar) const {
         return Spectrum(rgb * scalar);
     }

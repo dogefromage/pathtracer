@@ -9,13 +9,16 @@ inputs:
   # - assets/glass_mirror.gltf
   # - assets/cornell.gltf
   # - assets/two_lights.gltf
-  - assets/many_lights.gltf
+  # - assets/many_lights.gltf
   # - ../glTF-Sample-Models/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf
   # - ../glTF-Sample-Models/2.0/TextureSettingsTest/glTF/TextureSettingsTest.gltf
   # - ../glTF-Sample-Models/2.0/NormalTangentTest/glTF/NormalTangentTest.gltf
   # - ../glTF-Sample-Models/2.0/NormalTangentMirrorTest/glTF/NormalTangentMirrorTest.gltf
   # - ../glTF-Sample-Models/2.0/AlphaBlendModeTest/glTF/AlphaBlendModeTest.gltf
   # - ../glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf
+  - ../glTF-Sample-Models/2.0/EnvironmentTest/glTF/EnvironmentTest.gltf
+  # - ../glTF-Sample-Models/2.0/SpecGlossVsMetalRough/glTF/SpecGlossVsMetalRough.gltf
+  
   # - assets/textured_plane.gltf
 
 pathtracer:
@@ -34,17 +37,17 @@ pathtracer:
     # resolution-y: 2000
     resolution-x: 1024
     resolution-y: 1024
-    exposure: 1.5
+    exposure: 2
 
   sampling:
     seed: 42
-    samples: 300
+    samples: 1000
     samples-every-update: 50
 
   world:
-    clear-color: 0 0 0
-    # clear-color: 3 3 3
-    # clear-color-texture: assets/sunny_rose_garden_1k.hdr
+    # clear-color: 0 0 0
+    clear-color: 1 1 1
+    clear-color-texture: assets/sunny_rose_garden_1k.hdr
     # clear-color-texture: assets/farmland_overcast_1k.hdr
     # clear-color-texture: assets/uv_test.png
 

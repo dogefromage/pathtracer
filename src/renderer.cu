@@ -287,7 +287,7 @@ static __device__ float evaluate_direct_p(context_t &c, const Ray &ray,
 
 static __device__ Spectrum integrate_Li(context_t &c, Ray ray) {
     Spectrum light = Spectrum::Zero();
-    Spectrum throughput = Spectrum::Itentity();
+    Spectrum throughput = Spectrum::Identity();
 
     for (int depth = 0;; depth++) {
         intersection_t hit;

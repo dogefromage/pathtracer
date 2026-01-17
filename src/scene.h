@@ -86,9 +86,9 @@ typedef struct {
 typedef struct {
     char name[MATERIAL_NAME_SIZE];
     Vec4 baseColorFactor;
-    int32_t baseColorTexture, normalTexture;
+    int32_t baseColorTexture{-1}, normalTexture{-1}, metallicRoughnessTexture{-1};
     Vec3 emissive;
-    float metallic, roughness, ior, transmission;
+    float specular, metallicFactor, roughnessFactor, ior, transmission;
     alpha_mode_t alphaMode;
     float alphaCutoff;
 } material_t;

@@ -14,7 +14,8 @@ typedef struct {
 
 struct BRDF {
 
-    Vec3 base_color;
+    Spectrum baseColor;
+    float roughness, metallic, specular;
 
     // Evaluate BRDF * cos(theta)
     __device__ Spectrum eval(const Vec3 &wo, const Vec3 &wi) const;

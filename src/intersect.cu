@@ -110,13 +110,26 @@ __device__ void intersect_face(const Scene &scene, const Ray &ray, intersection_
             hit.texcoord0 = barycentric_lincom(A.texcoord0, B.texcoord0, C.texcoord0, t, u, v);
 
             // get color based on https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
-            hit.brdf.base_color = hit.mat->baseColorFactor.xyz();
+            Vec3 baseColor = hit.mat->baseColorFactor.xyz();
+
             hit.alpha = hit.mat->baseColorFactor.w;
             if (hit.mat->baseColorTexture >= 0) {
                 const texture_t &tex = scene.textures[hit.mat->baseColorTexture];
                 Vec4 color_lookup = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, true);
-                hit.brdf.base_color *= color_lookup.xyz();
+                baseColor *= color_lookup.xyz();
                 hit.alpha *= color_lookup.w;
+            }
+
+            hit.brdf.baseColor = Spectrum::fromRGB(baseColor);
+            hit.brdf.specular = hit.mat->specular;
+            hit.brdf.metallic = hit.mat->metallicFactor;
+            hit.brdf.roughness = hit.mat->roughnessFactor;
+
+            if (hit.mat->metallicRoughnessTexture >= 0) {
+                const texture_t &tex = scene.textures[hit.mat->metallicRoughnessTexture];
+                Vec4 mr = sample_texture(tex, hit.texcoord0.x, hit.texcoord0.y, false);
+                hit.brdf.roughness *= mr.y; // green channel is roughness
+                hit.brdf.metallic *= mr.z;  // blue channel is metallic
             }
 
             switch (hit.mat->alphaMode) {

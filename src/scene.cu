@@ -183,8 +183,10 @@ static void print_material(const material_t *material) {
     log_trace("  Transmission: %.2f\n", material->transmission);
     log_trace("  Emissive: (%.2f, %.2f, %.2f)\n", material->emissive.x, material->emissive.y,
               material->emissive.z);
-    log_trace("  Metallic: %.2f\n", material->metallic);
-    log_trace("  Roughness: %.2f\n", material->roughness);
+    log_trace("  Metallic: %.2f\n", material->metallicFactor);
+    log_trace("  Roughness: %.2f\n", material->roughnessFactor);
+    log_trace("  Metallic roughness texture: (%d)\n", material->metallicRoughnessTexture);
+    log_trace("  Specular: %.2f\n", material->specular);
     log_trace("  IoR: %.2f\n", material->ior);
 }
 
@@ -198,21 +200,37 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
 
     float emissiveStrength = 0;
     float transmissionFactor = 0;
-    float ior = 1.333;
+    float ior = 1.3;
+    float specularFactor = 0;
 
     for (const auto &extension : sceneMat.extensions) {
         if (extension.first == "KHR_materials_emissive_strength") {
-            emissiveStrength =
-                (float)extension.second.Get("emissiveStrength").GetNumberAsDouble();
+            emissiveStrength = extension.second.Get("emissiveStrength").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_transmission") {
-            transmissionFactor =
-                (float)extension.second.Get("transmissionFactor").GetNumberAsDouble();
+            transmissionFactor = extension.second.Get("transmissionFactor").GetNumberAsDouble();
         } else if (extension.first == "KHR_materials_ior") {
-            ior = (float)extension.second.Get("ior").GetNumberAsDouble();
+            ior = extension.second.Get("ior").GetNumberAsDouble();
+        } else if (extension.first == "KHR_materials_specular") {
+            // https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_materials_specular/README.md
+            specularFactor = extension.second.Get("specularFactor").GetNumberAsDouble();
+            // TODO specular color factor
         } else {
             log_warning("Unknown extension: %s\n", extension.first.c_str());
         }
     }
+
+    mat.alphaCutoff = sceneMat.alphaCutoff;
+    mat.baseColorFactor = get_vec4(sceneMat.pbrMetallicRoughness.baseColorFactor);
+    mat.emissive = emissiveStrength * get_vec3(sceneMat.emissiveFactor);
+    mat.metallicFactor = sceneMat.pbrMetallicRoughness.metallicFactor;
+    mat.roughnessFactor = sceneMat.pbrMetallicRoughness.roughnessFactor;
+    mat.transmission = transmissionFactor;
+    mat.specular = specularFactor;
+    mat.ior = ior;
+
+    mat.baseColorTexture = sceneMat.pbrMetallicRoughness.baseColorTexture.index;
+    mat.normalTexture = sceneMat.normalTexture.index;
+    mat.metallicRoughnessTexture = sceneMat.pbrMetallicRoughness.metallicRoughnessTexture.index;
 
     if (sceneMat.alphaMode == "OPAQUE") {
         mat.alphaMode = ALPHA_OPAQUE;
@@ -223,20 +241,6 @@ static void parse_material(temp_scene_t &scene, const tg::Material &sceneMat) {
     if (sceneMat.alphaMode == "BLEND") {
         mat.alphaMode = ALPHA_BLEND;
     }
-    mat.alphaCutoff = sceneMat.alphaCutoff;
-
-    // SET MATERIAL VALUES
-
-    mat.baseColorFactor = get_vec4(sceneMat.pbrMetallicRoughness.baseColorFactor);
-    mat.emissive = emissiveStrength * get_vec3(sceneMat.emissiveFactor);
-    mat.metallic = (float)sceneMat.pbrMetallicRoughness.metallicFactor;
-    mat.roughness = (float)sceneMat.pbrMetallicRoughness.roughnessFactor;
-    mat.ior = ior;
-    mat.transmission = (float)transmissionFactor;
-
-    mat.baseColorTexture = sceneMat.pbrMetallicRoughness.baseColorTexture.index;
-
-    mat.normalTexture = sceneMat.normalTexture.index;
 
     if (sceneMat.pbrMetallicRoughness.baseColorTexture.texCoord != 0) {
         log_warning("TODO implement other texCoords");
